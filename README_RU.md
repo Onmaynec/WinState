@@ -1,54 +1,25 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="WinState — Git для конфигурации Windows" width="100%" />
+  <img src="assets/banner.svg" alt="WinState — декларативное управление Windows" width="100%" />
 </p>
 
-<p align="center">
-  <strong>Сохраняйте конфигурацию Windows как код, заранее проверяйте изменения и проектируйте безопасный rollback.</strong>
-</p>
+# 🇷🇺 WinState
 
-<p align="center">
-  <a href="docs/ARCHITECTURE.md">🏗️ Архитектура</a> ·
-  <a href="docs/CONFIGURATION.md">⚙️ Конфигурация</a> ·
-  <a href="docs/STORAGE.md">🗄️ SQLite</a> ·
-  <a href="docs/IMPLEMENTATION_PLAN.md">🗺️ Roadmap</a>
-</p>
+Русская документация является основной документацией проекта. Полное описание текущей версии находится в [`README.md`](README.md).
 
----
+## Текущая версия
 
-## ✨ Что такое WinState?
-
-**WinState** — open-source CLI-инструмент для Windows 10/11, который постепенно строится вокруг безопасного жизненного цикла:
+**`0.6.0-alpha.1` — Nexus Control Fabric, Unified Apply Engine и безопасное автообновление.**
 
 ```text
-Capture → Compare → Plan → Apply → Verify → Rollback
+Provider plans → unified execution graph
+               → checkpoints → apply → verify
+               → resume / reboot pending / rollback
+
+GitHub Releases → Semantic Version
+                → ZIP + SHA-256 → safe updater
 ```
 
-> **Текущий статус:** `0.2.0-alpha.1`. Реализован рабочий application skeleton: DI, logging, конфигурация, portable paths, SQLite и миграции. Системные настройки Windows пока не изменяются.
-
-## 🩺 Превью WinState Doctor
-
-<p align="center">
-  <img src="assets/screenshots/doctor-preview.svg" alt="Превью команды winstate doctor" width="92%" />
-</p>
-
-## ✅ Что уже работает
-
-| Область | Состояние |
-|---|---|
-| Доменная модель и provider contracts | ✅ |
-| Bootstrap YAML validation | ✅ |
-| Dependency graph | ✅ |
-| Dependency injection | ✅ |
-| Console logging | ✅ |
-| `winstate.json` и `WINSTATE_*` | ✅ |
-| User-data / portable paths | ✅ |
-| SQLite + migration history | ✅ |
-| `doctor`, `config`, `storage` | ✅ |
-| Unit tests и Linux/Windows CI | ✅ |
-| Полный Profile Engine | ⏭️ следующий этап |
-| Изменение Windows | 🧭 после Profile Engine |
-
-## 🚀 Быстрый старт
+## Быстрый старт
 
 ```powershell
 git clone https://github.com/Onmaynec/WinState.git
@@ -57,38 +28,29 @@ cd WinState
 dotnet restore
 dotnet build -c Release
 dotnet test -c Release
-
-dotnet run --project src/WinState.Cli -- --help
-dotnet run --project src/WinState.Cli -- doctor --home .\.winstate-dev
-dotnet run --project src/WinState.Cli -- storage status --home .\.winstate-dev
+dotnet run --project src/WinState.Cli
 ```
 
-## ⚙️ Конфигурация
+## Документация
+
+- [`docs/CYBER_CONTROL_CENTER.md`](docs/CYBER_CONTROL_CENTER.md) — Nexus и cyber UI;
+- [`docs/APPLY_ENGINE.md`](docs/APPLY_ENGINE.md) — общий transaction engine;
+- [`docs/AUTO_UPDATE.md`](docs/AUTO_UPDATE.md) — проверка и установка обновлений;
+- [`docs/PROFILE_ENGINE.md`](docs/PROFILE_ENGINE.md) — YAML Profile Engine;
+- [`docs/ENVIRONMENT_PROVIDER.md`](docs/ENVIRONMENT_PROVIDER.md) — первый Windows provider;
+- [`docs/SECURITY.md`](docs/SECURITY.md) — safeguards и threat model;
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — roadmap.
+
+## Автообновление
+
+Официальная release-сборка проверяет GitHub Releases, сверяет Semantic Version, скачивает ZIP и `.sha256`, проверяет SHA-256 и устанавливает обновление отдельным процессом после завершения WinState.
+
+Source checkout через `dotnet run` не перезаписывается. Для него обновление выполняется командой:
 
 ```powershell
-winstate config show
-winstate config path
+git pull
 ```
 
-Поддерживаются `WINSTATE_HOME`, `WINSTATE_PROFILES`, `WINSTATE_DATABASE`, `WINSTATE_LOGS`, `WINSTATE_LOG_LEVEL` и `WINSTATE_PORTABLE`.
+## Лицензия
 
-## 🗄️ SQLite
-
-```powershell
-winstate storage migrate
-winstate storage status
-```
-
-Миграции транзакционны и идемпотентны. Начальная схема готовит таблицы для профилей, ownership, baseline, транзакций, backup metadata и drift.
-
-## 🛡️ Безопасность
-
-WinState не хранит секреты в конфигурации или SQLite, не применяет системные изменения вслепую и не обещает полный backup Windows. Опасные provider-функции появятся только вместе с планом, подтверждением, checkpoint, verification и rollback.
-
-## 🗺️ Следующий этап
-
-`0.3.0-alpha.1` — полный Profile Engine: YAML loading, includes, inheritance, variables и normalization.
-
-## 📄 Лицензия
-
-MIT License.
+MIT License — см. [`LICENSE`](LICENSE).
