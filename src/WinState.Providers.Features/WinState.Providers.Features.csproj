@@ -1,8 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>Windows Optional Features provider для WinState.</Description>
+    <Description>Windows Optional Features и System Control providers для WinState.</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinState.Domain\WinState.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
   </ItemGroup>
 </Project>
