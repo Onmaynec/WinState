@@ -54,58 +54,35 @@ Discover → Diff → Plan → Confirm → Checkpoint → Apply → Verify → R
 
 ## ✅ Этап 7 — Packages и Windows Features (`0.7.0-alpha.1`)
 
-### WinGet Provider
+- production providers `packages.winget` и `windows.features`;
+- exact-ID package operations и DISM `/NoRestart`;
+- package install rollback и честные irreversible boundaries;
+- feature checkpoint, verification и rollback;
+- YAML, samples, schema, Forge UI и Windows prerequisite CI.
 
-- отдельный проект `WinState.Providers.Packages`;
-- package discovery и normalized identity;
-- exact-ID install, update и uninstall;
-- exact/latest version policy;
-- user/machine scope;
-- install checkpoint и rollback;
-- irreversible boundary для upgrade/uninstall;
-- post-operation verification;
-- fake-client unit tests.
+## ✅ Этап 8 — Registry, Services, Startup и Tasks (`0.8.0-alpha.1`)
 
-### Windows Features Provider
+- production provider `windows.system`;
+- Registry allowlist `HKCU\\Software` и `HKLM\\SOFTWARE`;
+- Registry types string/expandString/dword/qword/multiString/binary;
+- Windows Services state и start mode;
+- Startup entries через стандартный Registry Run key;
+- Scheduled Tasks `logon`, `startup` и `daily`;
+- risk/admin policy для destructive и elevated operations;
+- per-resource backup payloads, verification и rollback;
+- includes/extends, variables и deterministic resource identities;
+- подключение к общему Apply Engine и dependency graph;
+- fake-client unit tests, sample, документация и SCM/Task Scheduler CI scan.
 
-- отдельный проект `WinState.Providers.Features`;
-- DISM inventory;
-- enable/disable через `/NoRestart`;
-- administrator и reboot boundaries;
-- checkpoint исходного состояния;
-- verification и rollback;
-- обработка exit code `3010`;
-- fake-client unit tests.
+Persistent ownership store намеренно перенесён в этап Capture/Drift. В `0.8` WinState изменяет только явно перечисленные exact resources и не выполняет массовую очистку неизвестных Registry values, services, Startup entries или tasks.
 
-### Интеграция
-
-- YAML-секции `packages` и `features`;
-- inheritance, variables, overlay и validation;
-- три production adapters в одном Unified Apply Engine;
-- Package & Feature Forge;
-- provider telemetry и risk plan;
-- sample, JSON Schema, документация и SVG-превью;
-- Windows prerequisite scan для winget и DISM.
-
-Отложено намеренно: массовый `removeUnmanagedPackages` и полноценная ownership policy. До появления надёжного ownership store WinState не удаляет неизвестные packages.
-
-## ⏭️ Этап 8 — Registry, Services, Startup и Tasks (`0.8.0-alpha.1`)
-
-- allowlisted Registry provider;
-- Windows Services state/start mode;
-- Startup entries;
-- Scheduled Tasks definitions;
-- ownership markers;
-- per-resource backup payloads;
-- dependency links между services/features/packages;
-- verification и rollback через общий Apply Engine.
-
-## Этап 9 — Git, PowerShell, Files и Capture
+## ⏭️ Этап 9 — Git, PowerShell, Files и Capture (`0.9.0-alpha.1`)
 
 - Git configuration;
 - PowerShell modules;
 - managed files and directories;
 - capture/export;
+- persistent ownership markers;
 - profile snapshots и drift scan.
 
 ## Этап 10 — stable release pipeline

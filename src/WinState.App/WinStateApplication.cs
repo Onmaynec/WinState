@@ -9,6 +9,7 @@ using WinState.Infrastructure.Configuration;
 using WinState.Providers.EnvironmentVariables;
 using WinState.Providers.Features;
 using WinState.Providers.Packages;
+using WinState.Providers.SystemControl;
 using WinState.Storage;
 
 namespace WinState.App;
@@ -22,7 +23,7 @@ public sealed record ProfileCatalogEntry(
 /// <summary>Композиционный корень и фасад прикладных сценариев WinState.</summary>
 public sealed class WinStateApplication : IAsyncDisposable
 {
-    public const string Version = "0.7.0-alpha.1";
+    public const string Version = "0.8.0-alpha.1";
 
     private readonly ServiceProvider _services;
 
@@ -63,6 +64,7 @@ public sealed class WinStateApplication : IAsyncDisposable
         });
         services.AddSingleton<ProfileEngine>();
         services.AddSingleton<ProfileValidator>();
+        services.AddSingleton<WindowsSystemProfileLoader>();
         services.AddSingleton<DependencyGraph>();
         services.AddSingleton<SqliteStateStore>();
         services.AddSingleton<TransactionHistoryStore>();
@@ -75,10 +77,13 @@ public sealed class WinStateApplication : IAsyncDisposable
         services.AddSingleton<WingetPackageProvider>();
         services.AddSingleton<IWindowsFeatureClient, DismWindowsFeatureClient>();
         services.AddSingleton<WindowsFeatureProvider>();
+        services.AddSingleton<IWindowsSystemClient>(_ => WindowsSystemClientFactory.Create());
+        services.AddSingleton<WindowsSystemProvider>();
 
         services.AddSingleton<IApplyProviderExecutor, EnvironmentApplyExecutor>();
         services.AddSingleton<IApplyProviderExecutor, WingetApplyExecutor>();
         services.AddSingleton<IApplyProviderExecutor, WindowsFeatureApplyExecutor>();
+        services.AddSingleton<IApplyProviderExecutor, WindowsSystemApplyExecutor>();
         services.AddSingleton<ApplyEngine>();
         services.AddSingleton<UnifiedApplyWorkflow>();
         services.AddSingleton<DoctorService>();
@@ -98,6 +103,8 @@ public sealed class WinStateApplication : IAsyncDisposable
             path,
             new ProfileLoadOptions(variables, ReadEnvironment()),
             cancellationToken);
+        _ = await _services.GetRequiredService<WindowsSystemProfileLoader>()
+            .LoadAsync(path, variables, ReadEnvironment(), cancellationToken);
         return (loaded, validator.Validate(loaded.Profile));
     }
 

@@ -7,39 +7,33 @@
 </p>
 
 <p align="center">
+  <a href="docs/SYSTEM_CONTROL.md">🪟 System Control</a> ·
   <a href="docs/PACKAGES_FEATURES.md">📦 Packages & Features</a> ·
   <a href="docs/APPLY_ENGINE.md">🧠 Apply Engine</a> ·
   <a href="docs/AUTO_UPDATE.md">📡 Автообновление</a> ·
-  <a href="docs/PROFILE_ENGINE.md">🧩 Profile Engine</a> ·
   <a href="docs/SECURITY.md">🛡️ Безопасность</a>
 </p>
 
 ---
 
-## 🟢 WinState `0.7.0-alpha.1`
+## 🟢 WinState `0.8.0-alpha.1`
 
-Версия `0.7` подключает к Unified Apply Engine два новых production providers:
+Версия `0.8` добавляет **Windows System Control Plane**:
 
 ```text
 environment        → User/Machine variables и PATH
 packages.winget    → install / upgrade / uninstall
 windows.features   → DISM enable / disable
+windows.system     → Registry / Services / Startup / Scheduled Tasks
 ```
 
-Все изменения проходят единый проверяемый конвейер:
+Все providers выполняются через единый проверяемый pipeline:
 
 ```text
-YAML profile → discovery → diff → unified execution graph
-             → risk/admin/irreversible gates
-             → checkpoints → apply → verification
-             → persisted transaction → resume / rollback / reboot pending
+YAML profile → discovery → deterministic graph → risk/admin gates
+             → all checkpoints → apply → verification
+             → persisted transaction → resume / rollback
 ```
-
-## 🖥️ Превью Package & Feature Forge
-
-<p align="center">
-  <img src="assets/screenshots/package-feature-forge.svg" alt="WinState Package and Feature Forge" width="96%" />
-</p>
 
 ## 🚀 Запуск
 
@@ -56,231 +50,152 @@ dotnet test -c Release
 dotnet run --project src/WinState.Cli
 ```
 
-Без аргументов открывается **Forge Control Fabric**:
-
-| Канал | Назначение |
-|---|---|
-| `[01] NEXUS CONTROL FABRIC` | Transaction Matrix, Update Uplink и прежний Cyber Control Center |
-| `[02] PACKAGE & FEATURE FORGE` | WinGet inventory, DISM features, unified plan и execution trace |
-| `[00] DISCONNECT` | безопасное завершение сессии |
-
-## 📝 Профиль packages и features
+## 🪟 System Control profile
 
 ```yaml
 schemaVersion: 1
 
 metadata:
-  name: Developer Workstation
+  name: Managed Workstation
 
-settings:
-  allowReboot: false
-
-packages:
-  - id: Git.Git
+registry:
+  - hive: HKCU
+    path: Software\\Example\\App
+    name: Channel
     state: present
-    version: latest
-    source: winget
-    scope: machine
-    allowUpgrade: true
-    mayRequireReboot: false
+    type: string
+    value: stable
 
-features:
-  - name: Microsoft-Windows-Subsystem-Linux
-    state: enabled
-    includeParents: true
+services:
+  - name: EventLog
+    state: running
+    startMode: automatic
 
-  - name: VirtualMachinePlatform
-    state: enabled
-    includeParents: true
+startup:
+  - name: Example Agent
+    scope: user
+    state: absent
+
+tasks:
+  - name: Example Maintenance
+    state: absent
+    schedule: logon
+    runLevel: limited
 ```
 
-Готовый пример: [`samples/packages-features/developer-workstation.yaml`](samples/packages-features/developer-workstation.yaml).
+Готовый пример: [`samples/system-control/safe-workstation.yaml`](samples/system-control/safe-workstation.yaml).
 
-## 📦 WinGet Provider
+Подробнее: [`docs/SYSTEM_CONTROL.md`](docs/SYSTEM_CONTROL.md).
 
-Provider `packages.winget` использует официальный `winget.exe` и exact package ID.
+## Registry safety
 
-| Сценарий | Action | Risk | Rollback |
-|---|---|---|---|
-| package отсутствует | `Install` | Low / Medium | ✅ удалить установленный транзакцией package |
-| найдена другая версия | `Update` | Medium / High | ⚠️ не гарантируется |
-| `state: absent` | `Uninstall` | High | ⚠️ не гарантируется |
-| состояние совпадает | no-op | None | не требуется |
-
-Upgrade и uninstall честно помечаются **irreversible**: нужная старая версия или installer могут исчезнуть из source. Unified Apply Engine не запустит такие действия без отдельного разрешения.
-
-Команды запускаются без shell-конкатенации аргументов:
+WinState не является unrestricted Registry editor. Разрешены только:
 
 ```text
---id <exact-id> --exact --silent --disable-interactivity
+HKCU\Software\...
+HKLM\SOFTWARE\...
 ```
 
-## 🧩 Windows Optional Features
+Поддерживаются `string`, `expandString`, `dword`, `qword`, `multiString` и `binary`. Удаление value имеет risk `High`; HKLM требует administrator gate.
 
-Provider `windows.features` использует DISM:
+## Windows Services
 
-```powershell
-dism.exe /Online /Get-Features /Format:Table /English
-dism.exe /Online /Enable-Feature  /FeatureName:<name> /NoRestart /Quiet /English /All
-dism.exe /Online /Disable-Feature /FeatureName:<name> /NoRestart /Quiet /English
+Provider управляет только существующими services:
+
+```text
+state: running | stopped | unchanged
+startMode: automatic | manual | disabled | unchanged
 ```
 
-Правила безопасности:
+Остановка или отключение service имеет risk `High`. Создание и удаление service definitions не выполняется.
 
-- всегда требуется administrator policy;
-- enable имеет risk `Medium`, disable — `High`;
-- перед изменением сохраняется исходное состояние;
-- rollback возвращает `Enabled`/`Disabled`;
-- exit code `3010` переводится в reboot-pending;
-- используется `/NoRestart`: WinState не перезагружает компьютер скрытно.
+## Startup и Scheduled Tasks
+
+Startup entries используют стандартный Registry Run key. Scheduled Tasks создаются через `schtasks.exe` и поддерживают schedules `logon`, `startup`, `daily`.
+
+Для rollback сохраняются:
+
+- прежнее Registry value;
+- исходные service state/start mode;
+- прежняя Startup command;
+- полный XML Scheduled Task.
+
+## 📦 Packages и Windows Features
+
+`packages.winget` использует exact package IDs и `ProcessStartInfo.ArgumentList`. Upgrade/uninstall считаются irreversible, если точное восстановление версии не гарантируется.
+
+`windows.features` использует DISM с `/NoRestart`; exit code `3010` переводится в reboot-pending без скрытой перезагрузки.
+
+Подробнее: [`docs/PACKAGES_FEATURES.md`](docs/PACKAGES_FEATURES.md).
 
 ## 🧠 Unified Apply Engine
 
-Три production adapters выполняются в одной транзакции:
-
-```text
-environment actions ─┐
-winget actions ──────┼→ deterministic graph → risk groups → execution
-feature actions ─────┘
-```
-
 Engine обеспечивает:
 
-- проверку action IDs, dependencies и cycles;
-- отдельные admin, Critical и irreversible policy gates;
+- deterministic dependency ordering;
+- проверку missing dependencies и cycles;
+- отдельные admin, Critical и irreversible gates;
 - checkpoint barrier до первой мутации;
 - verification каждого action;
 - атомарный `transaction.json`;
-- сохранение progress после каждого verified action;
-- resume после остановки процесса;
-- cross-provider rollback в обратном порядке;
-- `SucceededRebootPending` без автоматической перезагрузки.
-
-Manifest:
-
-```text
-<WINSTATE_HOME>/backups/transactions/<transaction-id>/transaction.json
-```
+- progress persistence и resume;
+- cross-provider rollback в обратном порядке.
 
 Подробнее: [`docs/APPLY_ENGINE.md`](docs/APPLY_ENGINE.md).
 
-## 📡 Автообновление
+## 📡 Автообновление и релизы
 
-Официальная release-сборка проверяет GitHub Releases, выбирает `win-x64` или `win-arm64`, скачивает ZIP и `.sha256`, проверяет хеш, блокирует ZIP traversal и передаёт замену файлов отдельному updater-процессу.
+Tag workflow собирает self-contained пакеты:
 
-```powershell
-$env:WINSTATE_AUTO_UPDATE = "prompt"      # по умолчанию
-$env:WINSTATE_UPDATE_CHANNEL = "prerelease"
-.\winstate.exe
+```text
+WinState-0.8.0-alpha.1-win-x64.zip
+WinState-0.8.0-alpha.1-win-x64.zip.sha256
+WinState-0.8.0-alpha.1-win-arm64.zip
+WinState-0.8.0-alpha.1-win-arm64.zip.sha256
 ```
 
-Запуск через `dotnet run` никогда не перезаписывает Git checkout.
-
-Подробнее: [`docs/AUTO_UPDATE.md`](docs/AUTO_UPDATE.md).
-
-## 🧩 Profile Engine
-
-Поддерживаются:
-
-- YAML `includes` и `extends`;
-- обнаружение циклов;
-- переменные `{{name}}`, `${name}`, `WINSTATE_VAR_*` и `--var`;
-- overlay environment, packages и features;
-- дедупликация package по `source + id`;
-- дедупликация feature по имени;
-- JSON Schema и русская validation diagnostics.
-
-Проверка профиля:
+Каждый ZIP содержит `winstate.exe` и `winstate.release.json`. Updater проверяет SHA-256 и блокирует ZIP path traversal.
 
 ```powershell
-dotnet run --project src/WinState.Cli -- validate `
-  .\samples\packages-features\developer-workstation.yaml
+.\scripts\package.ps1 -Runtime win-x64 -Version 0.8.0-alpha.1
 ```
 
-## 🧪 CI и тесты
+## 🧪 CI
 
 GitHub Actions проверяет Ubuntu и Windows:
 
 ```text
-restore → build with warnings-as-errors → all unit tests
-        → version 0.7 assertion → Profile Engine samples
-        → Forge demo → Environment status → Doctor → SQLite
+restore → warnings-as-errors build → all tests
+        → version 0.8 assertion → all profile samples
+        → Forge demo/provider registration
+        → Windows winget/DISM/SCM/Task Scheduler prerequisites
+        → release package + SHA-256 smoke
 ```
 
-На Windows дополнительно:
-
-```text
-winget prerequisite scan
-DISM Optional Features inventory
-real Environment plan → apply → verify → rollback
-self-contained release ZIP + SHA-256 + marker smoke test
-```
-
-Provider unit-тесты используют `IWingetClient` и `IWindowsFeatureClient`, поэтому не устанавливают программы и не включают Windows features на машине разработчика.
-
-## 🧱 Архитектура
-
-```text
-CyberForgeShell ─────────────── Update Uplink
-       │                              │
-       ▼                              ▼
-WinState.App workflows          WinState.Update
-       │
-       ▼
-WinState.Apply ── graph / manifest / resume / rollback
-       │
-       ├── EnvironmentApplyExecutor
-       ├── WingetApplyExecutor
-       └── WindowsFeatureApplyExecutor
-                    │
-        ┌───────────┼──────────────┐
-        ▼           ▼              ▼
- Environment     WinGet          DISM Features
-```
+System Control unit-тесты используют `IWindowsSystemClient`, поэтому CI не меняет реальные Registry values, services, Startup entries или tasks.
 
 ## 🛡️ Safety boundaries
 
 - plan всегда строится до apply;
-- все reversible checkpoints создаются до первой мутации;
-- success возможен только после повторного discovery/verification;
-- Machine/admin actions требуют отдельного подтверждения;
-- package upgrade/uninstall требуют irreversible gate;
-- automatic rollback включён по умолчанию;
-- DISM запускается с `/NoRestart`;
-- unmanaged packages не удаляются массово;
-- updater проверяет SHA-256 и release marker;
-- secrets не предназначены для обычного YAML-профиля.
+- all reversible checkpoints создаются до первой мутации;
+- success возможен только после повторного verification;
+- Machine/admin actions требуют отдельного policy gate;
+- destructive actions получают `High` risk;
+- Registry ограничен Software allowlist;
+- автоматического elevation или reboot нет;
+- unmanaged packages и неизвестные system resources массово не удаляются.
 
 ## ⚠️ Ограничения alpha
 
-- WinGet inventory зависит от формата современного App Installer;
-- downgrade/rollback package upgrade не гарантируется;
-- `removeUnmanagedPackages` пока не выполняет массовую очистку;
-- полноценный reboot-resume после входа в Windows ещё не создаёт startup task;
-- Authenticode signing запланирован на поздний release-этап;
-- WinState не заменяет полный образ или backup Windows.
+- service definitions не создаются и не удаляются;
+- WinGet inventory зависит от формата App Installer;
+- downgrade после package upgrade не гарантируется;
+- dependency references для System Control пока задаются точными action IDs;
+- Authenticode signing запланирован на stable pipeline.
 
 ## 🗺️ Следующий этап
 
-`0.8.0-alpha.1` — Registry, Services, Startup и Scheduled Tasks providers:
-
-```text
-allowlisted registry → service/startup state → task definitions
-                     → ownership policy → unified verification/rollback
-```
-
-## 📦 Release package
-
-```powershell
-.\scripts\package.ps1 -Runtime win-x64 -Version 0.7.0-alpha.1
-```
-
-Результат:
-
-```text
-artifacts/WinState-0.7.0-alpha.1-win-x64.zip
-artifacts/WinState-0.7.0-alpha.1-win-x64.zip.sha256
-```
+`0.9.0-alpha.1` — Git configuration, PowerShell modules, managed files/directories, capture/export и drift scan.
 
 ## 📄 Лицензия
 

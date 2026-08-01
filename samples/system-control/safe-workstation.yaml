@@ -1,0 +1,38 @@
+schemaVersion: 1
+
+metadata:
+  name: Safe System Control Workstation
+  description: Безопасный пример Registry, Services, Startup и Scheduled Tasks.
+  author: WinState
+  profileVersion: 1
+
+variables:
+  toolsDirectory: "{{ profileDirectory }}\\tools"
+
+settings:
+  strictMode: true
+  allowReboot: false
+
+registry:
+  - hive: HKCU
+    path: Software\\WinState\\Managed
+    name: ReleaseChannel
+    state: present
+    type: string
+    value: alpha
+
+services:
+  - name: EventLog
+    state: running
+    startMode: automatic
+
+startup:
+  - name: WinState Example
+    scope: user
+    state: absent
+
+tasks:
+  - name: WinState Example Maintenance
+    state: absent
+    schedule: logon
+    runLevel: limited

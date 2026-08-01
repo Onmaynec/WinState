@@ -7,6 +7,7 @@ using WinState.Infrastructure.Configuration;
 using WinState.Providers.EnvironmentVariables;
 using WinState.Providers.Features;
 using WinState.Providers.Packages;
+using WinState.Providers.SystemControl;
 using WinState.Storage;
 
 namespace WinState.App;
@@ -86,7 +87,24 @@ public sealed class WindowsFeatureApplyExecutor : IApplyProviderExecutor
     public Task<RollbackExecutionResult> RollbackAsync(RollbackAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.RollbackAsync(action, context, cancellationToken);
 }
 
-/// <summary>Собирает Environment, WinGet и Optional Features в одну транзакцию.</summary>
+public sealed class WindowsSystemApplyExecutor : IApplyProviderExecutor
+{
+    private readonly WindowsSystemProvider _provider;
+
+    public WindowsSystemApplyExecutor(WindowsSystemProvider provider)
+    {
+        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+    }
+
+    public string ProviderId => WindowsSystemProfileMapper.ProviderId;
+    public bool IsSupported => _provider.IsSupported;
+    public Task<RollbackPreparationResult> PrepareRollbackAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.PrepareRollbackAsync(action, context, cancellationToken);
+    public Task<ActionExecutionResult> ApplyAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.ApplyAsync(action, context, cancellationToken);
+    public Task<VerificationResult> VerifyAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.VerifyAsync(action, context, cancellationToken);
+    public Task<RollbackExecutionResult> RollbackAsync(RollbackAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.RollbackAsync(action, context, cancellationToken);
+}
+
+/// <summary>Собирает Environment, WinGet, Optional Features и Windows System Control в одну транзакцию.</summary>
 public sealed class UnifiedApplyWorkflow
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
@@ -94,9 +112,11 @@ public sealed class UnifiedApplyWorkflow
     private readonly WinStateOptions _options;
     private readonly ProfileEngine _profileEngine;
     private readonly ProfileValidator _validator;
+    private readonly WindowsSystemProfileLoader _systemProfileLoader;
     private readonly EnvironmentStateProvider _environmentProvider;
     private readonly WingetPackageProvider _wingetProvider;
     private readonly WindowsFeatureProvider _featureProvider;
+    private readonly WindowsSystemProvider _systemProvider;
     private readonly ApplyEngine _engine;
     private readonly TransactionHistoryStore _history;
 
@@ -104,18 +124,22 @@ public sealed class UnifiedApplyWorkflow
         WinStateOptions options,
         ProfileEngine profileEngine,
         ProfileValidator validator,
+        WindowsSystemProfileLoader systemProfileLoader,
         EnvironmentStateProvider environmentProvider,
         WingetPackageProvider wingetProvider,
         WindowsFeatureProvider featureProvider,
+        WindowsSystemProvider systemProvider,
         ApplyEngine engine,
         TransactionHistoryStore history)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _profileEngine = profileEngine ?? throw new ArgumentNullException(nameof(profileEngine));
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
+        _systemProfileLoader = systemProfileLoader ?? throw new ArgumentNullException(nameof(systemProfileLoader));
         _environmentProvider = environmentProvider ?? throw new ArgumentNullException(nameof(environmentProvider));
         _wingetProvider = wingetProvider ?? throw new ArgumentNullException(nameof(wingetProvider));
         _featureProvider = featureProvider ?? throw new ArgumentNullException(nameof(featureProvider));
+        _systemProvider = systemProvider ?? throw new ArgumentNullException(nameof(systemProvider));
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _history = history ?? throw new ArgumentNullException(nameof(history));
     }
@@ -143,6 +167,11 @@ public sealed class UnifiedApplyWorkflow
                 true);
         }
 
+        var systemProfile = await _systemProfileLoader.LoadAsync(
+            profilePath,
+            variables,
+            environment,
+            cancellationToken);
         var actions = new List<PlannedAction>();
         var diagnostics = new List<ProviderDiagnostic>();
         var supported = true;
@@ -189,6 +218,19 @@ public sealed class UnifiedApplyWorkflow
                 _featureProvider,
                 WindowsFeatureProfileMapper.CreateDesiredState(loaded.Profile),
                 "Windows Features Provider доступен только в Windows.",
+                providerContext,
+                planningContext,
+                actions,
+                diagnostics,
+                cancellationToken);
+        }
+
+        if (systemProfile.HasResources)
+        {
+            supported &= await AppendPlanAsync(
+                _systemProvider,
+                WindowsSystemProfileMapper.CreateDesiredState(systemProfile),
+                "Windows System Control доступен только в Windows.",
                 providerContext,
                 planningContext,
                 actions,
@@ -303,6 +345,14 @@ public sealed class UnifiedApplyWorkflow
             diagnostics.AddRange(discovery.Diagnostics);
         }
 
+        if (!_systemProvider.IsSupported)
+        {
+            diagnostics.Add(new ProviderDiagnostic(
+                "windows.system.unsupported",
+                "Registry, Services, Startup и Scheduled Tasks доступны только в Windows.",
+                true));
+        }
+
         return new SystemProvidersStatusReport(
             _environmentProvider.IsSupported,
             _wingetProvider.IsSupported,
@@ -329,6 +379,7 @@ public sealed class UnifiedApplyWorkflow
             EnvironmentStateProvider environment => environment.IsSupported,
             WingetPackageProvider winget => winget.IsSupported,
             WindowsFeatureProvider features => features.IsSupported,
+            WindowsSystemProvider system => system.IsSupported,
             _ => true
         };
         if (!supported)
