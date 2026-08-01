@@ -1,18 +1,24 @@
+using System.Collections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using WinState.App.Diagnostics;
 using WinState.Core.Planning;
 using WinState.Core.Profiles;
-using WinState.Domain.Profiles;
 using WinState.Infrastructure.Configuration;
 using WinState.Storage;
 
 namespace WinState.App;
 
+public sealed record ProfileCatalogEntry(
+    string Name,
+    string Path,
+    long SizeBytes,
+    DateTimeOffset ModifiedAt);
+
 /// <summary>Композиционный корень и фасад прикладных сценариев WinState.</summary>
 public sealed class WinStateApplication : IAsyncDisposable
 {
-    public const string Version = "0.2.0-alpha.1";
+    public const string Version = "0.3.0-alpha.1";
 
     private readonly ServiceProvider _services;
 
@@ -27,7 +33,8 @@ public sealed class WinStateApplication : IAsyncDisposable
     public static WinStateApplication Create(
         string? homeOverride = null,
         string? currentDirectory = null,
-        IReadOnlyDictionary<string, string?>? environment = null)
+        IReadOnlyDictionary<string, string?>? environment = null,
+        bool quiet = false)
     {
         var options = WinStateSettingsLoader.Load(homeOverride, currentDirectory, environment);
         var services = new ServiceCollection();
@@ -35,13 +42,16 @@ public sealed class WinStateApplication : IAsyncDisposable
         services.AddLogging(builder =>
         {
             builder.SetMinimumLevel(options.MinimumLogLevel);
-            builder.AddSimpleConsole(console =>
+            if (!quiet)
             {
-                console.SingleLine = true;
-                console.TimestampFormat = "HH:mm:ss ";
-            });
+                builder.AddSimpleConsole(console =>
+                {
+                    console.SingleLine = true;
+                    console.TimestampFormat = "HH:mm:ss ";
+                });
+            }
         });
-        services.AddSingleton<BootstrapYamlProfileReader>();
+        services.AddSingleton<ProfileEngine>();
         services.AddSingleton<ProfileValidator>();
         services.AddSingleton<DependencyGraph>();
         services.AddSingleton<SqliteStateStore>();
@@ -49,15 +59,26 @@ public sealed class WinStateApplication : IAsyncDisposable
         return new WinStateApplication(services.BuildServiceProvider(), options);
     }
 
-    public async Task<(WinStateProfile Profile, ProfileValidationResult Validation)> ValidateProfileAsync(
+    public async Task<(
+        LoadedProfile Loaded,
+        ProfileValidationResult Validation)> ValidateProfileAsync(
         string path,
+        IReadOnlyDictionary<string, string>? variables,
         CancellationToken cancellationToken)
     {
-        var reader = _services.GetRequiredService<BootstrapYamlProfileReader>();
+        var engine = _services.GetRequiredService<ProfileEngine>();
         var validator = _services.GetRequiredService<ProfileValidator>();
-        var profile = await reader.LoadAsync(path, cancellationToken);
-        return (profile, validator.Validate(profile));
+        var loaded = await engine.LoadAsync(
+            path,
+            new ProfileLoadOptions(variables, ReadEnvironment()),
+            cancellationToken);
+        return (loaded, validator.Validate(loaded.Profile));
     }
+
+    public Task<(LoadedProfile Loaded, ProfileValidationResult Validation)> ValidateProfileAsync(
+        string path,
+        CancellationToken cancellationToken)
+        => ValidateProfileAsync(path, null, cancellationToken);
 
     public Task<DoctorReport> RunDoctorAsync(CancellationToken cancellationToken)
         => _services.GetRequiredService<DoctorService>().RunAsync(cancellationToken);
@@ -68,5 +89,51 @@ public sealed class WinStateApplication : IAsyncDisposable
     public Task<StorageStatus> GetStorageStatusAsync(CancellationToken cancellationToken)
         => _services.GetRequiredService<SqliteStateStore>().GetStatusAsync(cancellationToken);
 
+    public Task<IReadOnlyCollection<string>> GetStorageTablesAsync(CancellationToken cancellationToken)
+        => _services.GetRequiredService<SqliteStateStore>().ListTablesAsync(cancellationToken);
+
+    public Task<IReadOnlyList<ProfileCatalogEntry>> ListProfilesAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!Directory.Exists(Options.ProfilesDirectory))
+        {
+            return Task.FromResult<IReadOnlyList<ProfileCatalogEntry>>(Array.Empty<ProfileCatalogEntry>());
+        }
+
+        var entries = Directory
+            .EnumerateFiles(Options.ProfilesDirectory, "*.*", SearchOption.AllDirectories)
+            .Where(path => path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase))
+            .Select(path =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var info = new FileInfo(path);
+                return new ProfileCatalogEntry(
+                    System.IO.Path.GetFileNameWithoutExtension(path),
+                    info.FullName,
+                    info.Length,
+                    info.LastWriteTimeUtc);
+            })
+            .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(entry => entry.Path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyList<ProfileCatalogEntry>>(entries);
+    }
+
     public ValueTask DisposeAsync() => _services.DisposeAsync();
+
+    private static IReadOnlyDictionary<string, string?> ReadEnvironment()
+    {
+        var values = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            if (entry.Key is string key)
+            {
+                values[key] = entry.Value?.ToString();
+            }
+        }
+
+        return values;
+    }
 }

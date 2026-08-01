@@ -28,6 +28,13 @@ jobs:
         run: dotnet test WinState.sln --configuration Release --no-build
       - name: CLI help smoke test
         run: dotnet run --project src/WinState.Cli --configuration Release --no-build -- --help
+      - name: Profile Engine smoke test
+        run: dotnet run --project src/WinState.Cli --configuration Release --no-build -- validate samples/profile-engine/workstation.yaml --var developerName=CI --var mode=true
+      - name: Terminal dashboard smoke test
+        shell: pwsh
+        run: |
+          $stateHome = Join-Path $PWD ".ci-winstate"
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- ui --demo --home $stateHome
       - name: Doctor and storage smoke tests
         shell: pwsh
         run: |

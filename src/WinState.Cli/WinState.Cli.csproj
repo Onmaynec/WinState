@@ -3,9 +3,10 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>winstate</AssemblyName>
     <RootNamespace>WinState.Cli</RootNamespace>
-    <Version>0.2.0-alpha.1</Version>
+    <Version>0.3.0-alpha.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinState.App\WinState.App.csproj" />
+    <ProjectReference Include="..\WinState.Terminal\WinState.Terminal.csproj" />
   </ItemGroup>
 </Project>

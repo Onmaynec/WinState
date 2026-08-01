@@ -1,9 +1,16 @@
 using System.Text;
 using WinState.App;
 using WinState.App.Diagnostics;
+using WinState.Terminal;
 
 Console.OutputEncoding = Encoding.UTF8;
-return await WinStateCli.RunAsync(args, CancellationToken.None);
+using var cancellation = new CancellationTokenSource();
+Console.CancelKeyPress += (_, eventArgs) =>
+{
+    eventArgs.Cancel = true;
+    cancellation.Cancel();
+};
+return await WinStateCli.RunAsync(args, cancellation.Token);
 
 internal static class WinStateCli
 {
@@ -20,7 +27,19 @@ internal static class WinStateCli
             return 2;
         }
 
-        if (invocation.Arguments.Count == 0 || invocation.Arguments[0] is "--help" or "-h" or "help")
+        if (invocation.Arguments.Count == 0)
+        {
+            if (Console.IsInputRedirected || Console.IsOutputRedirected)
+            {
+                PrintHelp();
+                return 0;
+            }
+
+            await using var interactiveApplication = WinStateApplication.Create(invocation.HomeOverride, quiet: true);
+            return await new WinStateTerminalShell(interactiveApplication).RunAsync(false, cancellationToken);
+        }
+
+        if (invocation.Arguments[0] is "--help" or "-h" or "help")
         {
             PrintHelp();
             return 0;
@@ -41,21 +60,43 @@ internal static class WinStateCli
 
         try
         {
-            await using var application = WinStateApplication.Create(invocation.HomeOverride);
+            var quiet = command == "ui";
+            await using var application = WinStateApplication.Create(invocation.HomeOverride, quiet: quiet);
             return command switch
             {
+                "ui" => await UiAsync(application, invocation.Arguments, cancellationToken),
                 "doctor" => await DoctorAsync(application, cancellationToken),
-                "validate" => await ValidateAsync(application, invocation.Arguments, cancellationToken),
+                "validate" => await ValidateAsync(application, invocation.Arguments, invocation.Variables, cancellationToken),
                 "config" => Config(application, invocation.Arguments),
                 "storage" => await StorageAsync(application, invocation.Arguments, cancellationToken),
                 _ => Unknown(command)
             };
+        }
+        catch (OperationCanceledException)
+        {
+            Console.Error.WriteLine("[CANCELLED] Операция отменена пользователем.");
+            return 130;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidDataException)
         {
             Console.Error.WriteLine($"[ERROR] {exception.Message}");
             return 4;
         }
+    }
+
+    private static Task<int> UiAsync(
+        WinStateApplication application,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        var demo = arguments.Skip(1).Any(value => value.Equals("--demo", StringComparison.OrdinalIgnoreCase));
+        if (!demo && (Console.IsInputRedirected || Console.IsOutputRedirected))
+        {
+            Console.Error.WriteLine("[ERROR] Интерактивная панель требует доступный терминал. Для smoke test используйте: winstate ui --demo");
+            return Task.FromResult(2);
+        }
+
+        return new WinStateTerminalShell(application).RunAsync(demo, cancellationToken);
     }
 
     private static async Task<int> DoctorAsync(WinStateApplication application, CancellationToken cancellationToken)
@@ -82,23 +123,28 @@ internal static class WinStateCli
     private static async Task<int> ValidateAsync(
         WinStateApplication application,
         IReadOnlyList<string> arguments,
+        IReadOnlyDictionary<string, string> variables,
         CancellationToken cancellationToken)
     {
         if (arguments.Count < 2)
         {
-            Console.Error.WriteLine("Использование: winstate validate <путь-к-winstate.yaml>");
+            Console.Error.WriteLine("Использование: winstate validate <profile> [--var name=value]");
             return 2;
         }
 
-        var result = await application.ValidateProfileAsync(arguments[1], cancellationToken);
-        Console.WriteLine($"Профиль: {result.Profile.Metadata.Name}");
-        Console.WriteLine($"Schema:  {result.Profile.SchemaVersion}");
-        Console.WriteLine($"User environment:    {result.Profile.Environment.User.Count}");
-        Console.WriteLine($"Machine environment: {result.Profile.Environment.Machine.Count}");
+        var result = await application.ValidateProfileAsync(arguments[1], variables, cancellationToken);
+        var profile = result.Loaded.Profile;
+        Console.WriteLine($"Профиль:   {profile.Metadata.Name}");
+        Console.WriteLine($"Schema:    {profile.SchemaVersion}");
+        Console.WriteLine($"Источники: {result.Loaded.SourceFiles.Count}");
+        Console.WriteLine($"Переменные:{result.Loaded.Variables.Count}");
+        Console.WriteLine($"User environment:    {profile.Environment.User.Count}");
+        Console.WriteLine($"Machine environment: {profile.Environment.Machine.Count}");
+        Console.WriteLine($"PATH entries:         {profile.Environment.UserPath.Count + profile.Environment.MachinePath.Count}");
 
         if (result.Validation.IsValid)
         {
-            Console.WriteLine("[OK] Базовая структура профиля корректна.");
+            Console.WriteLine("[OK] Профиль загружен, объединён и нормализован.");
             return 0;
         }
 
@@ -169,66 +215,92 @@ internal static class WinStateCli
         WINSTATE
         Git для конфигурации Windows.
 
-        Текущий этап: application skeleton 0.2.0-alpha.1
+        Без аргументов запускается интерактивный Control Center.
 
         Команды:
-          winstate --help                         Показать справку
-          winstate --version                      Показать версию
-          winstate architecture                   Показать границы модулей
-          winstate doctor [--home <path>]         Проверить конфигурацию и SQLite
-          winstate validate <profile>             Проверить bootstrap YAML
-          winstate config [show|path]             Показать вычисленные настройки
-          winstate storage [migrate|status]       Управлять локальной схемой SQLite
+          winstate                               Открыть панель со стрелочным управлением
+          winstate ui [--demo]                   Открыть панель / вывести CI-превью
+          winstate --help                        Показать справку
+          winstate --version                     Показать версию
+          winstate architecture                  Показать границы модулей
+          winstate doctor [--home <path>]        Проверить конфигурацию и SQLite
+          winstate validate <profile>            Загрузить и проверить полный YAML
+                    [--var name=value]            Переопределить переменную профиля
+          winstate config [show|path]            Показать вычисленные настройки
+          winstate storage [migrate|status]      Управлять локальной схемой SQLite
 
-        Переменные окружения:
-          WINSTATE_HOME, WINSTATE_PROFILES, WINSTATE_DATABASE,
-          WINSTATE_LOGS, WINSTATE_LOG_LEVEL, WINSTATE_PORTABLE
+        Управление панелью:
+          ↑ / ↓     перемещение
+          ENTER     открыть выбранный раздел
+          любая клавиша — вернуться в главное меню
 
-        Следующий этап:
-          полный Profile Engine: includes, variables и normalization
+        Profile Engine:
+          includes, extends, variables, WINSTATE_VAR_*, normalization
         """);
     }
 
     private static void PrintArchitecture()
     {
         Console.WriteLine("""
-        CLI → App composition root → Core engines
-                    │                 │
-                    ├─ Infrastructure └─ Domain contracts
-                    └─ SQLite Storage
+        Terminal UI → App composition root → Core engines
+                          │                 │
+                          ├─ Infrastructure └─ Domain contracts
+                          └─ SQLite Storage
 
-        Domain:         модели и контракты без внешних интеграций
-        Core:           профили, валидация и планирование
+        Terminal:       панели, меню, анимации и стрелочное управление
+        App:            DI, logging и прикладные сценарии
+        Core:           Profile Engine, validation и planning
         Infrastructure: конфигурация, пути и платформенные адаптеры
         Storage:        SQLite, миграции, ownership и история
-        App:            DI, logging и прикладные сценарии
-        CLI:            команды, вывод и exit codes
+        Domain:         модели и provider contracts
         """);
     }
 
-    private sealed record CliInvocation(IReadOnlyList<string> Arguments, string? HomeOverride)
+    private sealed record CliInvocation(
+        IReadOnlyList<string> Arguments,
+        string? HomeOverride,
+        IReadOnlyDictionary<string, string> Variables)
     {
         public static CliInvocation Parse(IReadOnlyList<string> args)
         {
             var filtered = new List<string>();
+            var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             string? home = null;
             for (var index = 0; index < args.Count; index++)
             {
-                if (!args[index].Equals("--home", StringComparison.OrdinalIgnoreCase))
+                if (args[index].Equals("--home", StringComparison.OrdinalIgnoreCase))
                 {
-                    filtered.Add(args[index]);
+                    if (index + 1 >= args.Count || string.IsNullOrWhiteSpace(args[index + 1]))
+                    {
+                        throw new ArgumentException("После --home необходимо указать путь.");
+                    }
+
+                    home = args[++index];
                     continue;
                 }
 
-                if (index + 1 >= args.Count || string.IsNullOrWhiteSpace(args[index + 1]))
+                if (args[index].Equals("--var", StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new ArgumentException("После --home необходимо указать путь.");
+                    if (index + 1 >= args.Count)
+                    {
+                        throw new ArgumentException("После --var необходимо указать name=value.");
+                    }
+
+                    var assignment = args[++index];
+                    var separator = assignment.IndexOf('=');
+                    if (separator <= 0)
+                    {
+                        throw new ArgumentException($"Некорректная переменная '{assignment}'. Используйте name=value.");
+                    }
+
+                    variables[assignment[..separator].Trim()] = assignment[(separator + 1)..];
+                    continue;
                 }
 
-                home = args[++index];
+                filtered.Add(args[index]);
             }
 
-            return new CliInvocation(filtered, home);
+            return new CliInvocation(filtered, home, variables);
         }
     }
 }

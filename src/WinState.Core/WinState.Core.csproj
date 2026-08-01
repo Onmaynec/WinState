@@ -2,7 +2,10 @@
   <ItemGroup>
     <ProjectReference Include="..\WinState.Domain\WinState.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
   <PropertyGroup>
-    <Description>Независимые движки профилей и планирования WinState.</Description>
+    <Description>Profile Engine, validation and planning primitives for WinState.</Description>
   </PropertyGroup>
 </Project>

@@ -25,11 +25,24 @@
         "allowReboot": { "type": "boolean", "default": false }
       }
     },
+    "variables": { "$ref": "#/$defs/stringMap" },
+    "includes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "extends": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
     "environment": {
       "type": "object",
       "properties": {
         "user": { "$ref": "#/$defs/stringMap" },
-        "machine": { "$ref": "#/$defs/stringMap" }
+        "machine": { "$ref": "#/$defs/stringMap" },
+        "userPath": { "$ref": "#/$defs/pathEntries" },
+        "machinePath": { "$ref": "#/$defs/pathEntries" }
       }
     }
   },
@@ -37,6 +50,18 @@
     "stringMap": {
       "type": "object",
       "additionalProperties": { "type": "string" }
+    },
+    "pathEntries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "state": { "enum": ["present", "absent"], "default": "present" },
+          "position": { "enum": ["prepend", "append"], "default": "append" }
+        }
+      }
     }
   }
 }

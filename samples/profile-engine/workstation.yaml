@@ -1,0 +1,19 @@
+schemaVersion: 1
+
+extends:
+  - base.yaml
+
+metadata:
+  name: "{{developerName}} Workstation"
+  description: Пример наследования и CLI-переменных
+  profileVersion: 1
+
+variables:
+  developerName: Developer
+
+environment:
+  user:
+    DEV_MODE: "${mode}"
+    EDITOR: code
+  machine:
+    WINSTATE_PROFILE: workstation
