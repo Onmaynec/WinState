@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>winstate</AssemblyName>
+    <RootNamespace>WinState.Cli</RootNamespace>
+    <Version>0.1.0-alpha.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinState.Core\WinState.Core.csproj" />
+    <ProjectReference Include="..\WinState.Domain\WinState.Domain.csproj" />
+  </ItemGroup>
+</Project>
