@@ -24,27 +24,71 @@
 - includes, extends и защита от циклов;
 - профильные, environment и CLI variables;
 - нормализация environment и PATH;
-- Profile Center в интерактивной панели;
-- CI smoke test неинтерактивного dashboard.
+- Profile Center в интерактивной панели.
 
-## ⏭️ Этап 4 — Environment Provider
+## ✅ Этап 4 — Environment Provider (`0.4.0-alpha.1`)
 
-Первый полный vertical slice:
+Первый полный Windows vertical slice:
 
 ```text
 Discover → Diff → Plan → Confirm → Checkpoint → Apply → Verify → Rollback
 ```
 
-Цель — безопасное управление user/machine environment variables и PATH с сохранением предыдущего состояния.
+Реализовано:
 
-## Этап 5 — Apply Engine
+- User/Machine environment discovery;
+- variable create/modify;
+- PATH add/remove/reorder;
+- deterministic actions и dependency ordering;
+- User/Machine risk policy;
+- отдельное подтверждение Machine scope;
+- checkpoint каждого действия;
+- post-apply verification;
+- автоматический и ручной rollback;
+- SQLite transaction/action/backup history;
+- Environment Center и CLI;
+- unit-тесты и настоящий Windows CI vertical slice.
 
-- risk policy;
-- confirmation;
-- transactions и checkpoints;
-- dependency execution;
-- cancellation и on-error policy.
+## ⏭️ Этап 5 — общий Apply Engine
 
-## Этапы 6–9
+- единая cross-provider transaction model;
+- централизованная risk policy;
+- confirmation groups;
+- dependency-aware parallel/sequential execution;
+- cancellation и on-error policies;
+- resume после перезапуска процесса;
+- reboot-pending state;
+- единый rollback нескольких providers;
+- terminal transaction dashboard.
 
-Packages, Features, Services, Registry, Git, PowerShell и Files providers; capture/export; история и отчёты; localization, portable release и полноценный release pipeline.
+## Этап 6 — Packages и Windows Features
+
+- WinGet provider;
+- optional features;
+- WSL prerequisites;
+- package ownership и remove policy;
+- reboot planning.
+
+## Этап 7 — Services, Registry, Git, PowerShell и Files
+
+- allowlisted registry provider;
+- services/startup/tasks;
+- Git configuration;
+- PowerShell modules;
+- managed files and directories.
+
+## Этап 8 — Capture, drift и отчёты
+
+- capture/export;
+- profile snapshots;
+- drift scan;
+- transaction history UI;
+- Markdown/JSON reports.
+
+## Этап 9 — release pipeline
+
+- localization;
+- portable/self-contained Windows builds;
+- signing and checksums;
+- migration compatibility;
+- release notes и стабильный `1.0` pipeline.
