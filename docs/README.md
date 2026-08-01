@@ -1,6 +1,8 @@
 # 📚 Документация WinState
 
-- [🟢 Cyber Control Center](CYBER_CONTROL_CENTER.md)
+- [🟢 Cyber Nexus / Control Center](CYBER_CONTROL_CENTER.md)
+- [🧠 Unified Apply Engine](APPLY_ENGINE.md)
+- [📡 Автоматическое обновление](AUTO_UPDATE.md)
 - [🖥️ Terminal UI contracts](TERMINAL_UI.md)
 - [🧩 Profile Engine](PROFILE_ENGINE.md)
 - [🌿 Environment Provider](ENVIRONMENT_PROVIDER.md)
@@ -12,4 +14,4 @@
 - [🛡️ Безопасность](SECURITY.md)
 - [🗺️ План реализации](IMPLEMENTATION_PLAN.md)
 
-Текущий этап: `0.5.0-alpha.1` — Cyber Control Center с NexRoute-inspired визуальным языком, номерными operation channels, boot/action traces и анимированными pipelines. Системные операции по-прежнему проходят безопасный цикл `discover → plan → checkpoint → apply → verify → rollback` через единый application workflow.
+Текущий этап: `0.6.0-alpha.1` — Nexus Control Fabric, общий multi-provider Apply Engine и Update Uplink. Engine создаёт единый dependency graph, готовит checkpoints всех providers до первой мутации, сохраняет progress, поддерживает resume, reboot-pending state и cross-provider rollback. Update Uplink проверяет GitHub Releases, semantic version, ZIP и SHA-256; self-install доступен только официальной release-сборке.
