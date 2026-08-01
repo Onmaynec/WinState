@@ -1,0 +1,18 @@
+schemaVersion: 1
+
+metadata:
+  name: Minimal Developer Workstation
+  description: Безопасный пример профиля архитектурного этапа
+  author: local-user
+  profileVersion: 1
+
+settings:
+  strictMode: false
+  removeUnmanagedPackages: false
+  allowReboot: false
+
+environment:
+  user:
+    WINSTATE_TEST: "enabled"
+    DEV_MODE: "true"
+  machine: {}
