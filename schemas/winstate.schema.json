@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winstate.dev/schemas/winstate.schema.json",
+  "title": "WinState Profile",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schemaVersion", "metadata"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "metadata": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "author": { "type": "string" },
+        "profileVersion": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "strictMode": { "type": "boolean", "default": false },
+        "removeUnmanagedPackages": { "type": "boolean", "default": false },
+        "allowReboot": { "type": "boolean", "default": false }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "user": { "$ref": "#/$defs/stringMap" },
+        "machine": { "$ref": "#/$defs/stringMap" }
+      }
+    }
+  },
+  "$defs": {
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}
