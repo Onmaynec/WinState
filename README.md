@@ -3,123 +3,39 @@
 </p>
 
 <p align="center">
-  <strong>Интерактивная консольная утилита для декларативного управления состоянием Windows.</strong>
+  <strong>Интерактивная консольная утилита для безопасного декларативного управления Windows.</strong>
 </p>
 
 <p align="center">
   <a href="docs/TERMINAL_UI.md">🖥️ Control Center</a> ·
   <a href="docs/PROFILE_ENGINE.md">🧩 Profile Engine</a> ·
-  <a href="docs/ARCHITECTURE.md">🏗️ Архитектура</a> ·
+  <a href="docs/ENVIRONMENT_PROVIDER.md">🌿 Environment Provider</a> ·
   <a href="docs/SECURITY.md">🛡️ Безопасность</a> ·
   <a href="docs/IMPLEMENTATION_PLAN.md">🗺️ Roadmap</a>
 </p>
 
 ---
 
-## ✨ WinState 0.3
+## ✨ WinState `0.4.0-alpha.1`
 
-**WinState** больше не выглядит как обычный набор команд для CMD. При запуске без аргументов открывается собственный полноэкранный **Control Center** с крупным символьным логотипом, панелями, стрелочным управлением и анимациями операций.
+WinState получил первый настоящий Windows provider. Теперь Control Center умеет не только читать профиль, но и безопасно управлять пользовательскими и машинными переменными окружения и отдельными элементами `PATH`.
 
-```powershell
-# Интерактивный режим
-winstate
-
-# Во время разработки
-dotnet run --project src/WinState.Cli
+```text
+Discover → Diff → Plan → Confirm
+         → Checkpoint → Apply → Verify → Rollback
 ```
 
-CLI-команды сохранены для CI, скриптов и автоматизации:
+Каждое изменение сначала появляется в execution plan. До применения создаётся checkpoint. После применения WinState повторно читает систему и проверяет результат. Ошибка включает автоматический rollback.
 
-```powershell
-winstate doctor
-winstate validate .\profiles\workstation.yaml --var developerName=Roman
-winstate storage status
-```
-
-## 🖥️ Превью Control Center
+## 🌿 Превью Environment Center
 
 <p align="center">
-  <img src="assets/screenshots/terminal-dashboard.svg" alt="WinState Control Center" width="94%" />
+  <img src="assets/screenshots/environment-center.svg" alt="WinState Environment Center" width="94%" />
 </p>
 
-> Превью схематически показывает интерфейс терминала. Реальный вид зависит от шрифта, размера окна и поддержки ANSI-цветов.
+> Превью схематически показывает интерфейс. Реальный вид зависит от шрифта, размера окна и поддержки ANSI-цветов.
 
-## 🎛️ Управление
-
-| Клавиша | Действие |
-|---|---|
-| `↑` / `↓` | перемещение по меню |
-| `Enter` | открыть выбранный раздел |
-| любая клавиша | вернуться в Control Center |
-| `Ctrl+C` | безопасно отменить текущую операцию |
-
-Разделы панели:
-
-- **Обзор системы** — версия, платформа, режим, профили и SQLite;
-- **Центр профилей** — поиск и проверка YAML-файлов;
-- **Диагностика** — оформленный Doctor с анимацией;
-- **Хранилище** — миграции, таблицы и размер базы;
-- **Конфигурация** — вычисленные пути и режим запуска;
-- **Архитектура и roadmap** — карта модулей и следующий этап.
-
-## 🧩 Полный Profile Engine
-
-Версия `0.3.0-alpha.1` заменяет bootstrap-reader полноценным загрузчиком YAML:
-
-- `includes` и `extends`;
-- обнаружение циклов наследования;
-- переменные `{{name}}` и `${name}`;
-- значения `WINSTATE_VAR_*`;
-- CLI-переопределения `--var name=value`;
-- объединение environment-секций;
-- нормализация и дедупликация PATH;
-- список всех исходных файлов профиля;
-- подробная валидация результата.
-
-Пример:
-
-```yaml
-schemaVersion: 1
-
-extends:
-  - base.yaml
-
-metadata:
-  name: "{{developerName}} Workstation"
-
-variables:
-  developerName: Developer
-
-environment:
-  user:
-    DEV_MODE: "${mode}"
-```
-
-```powershell
-winstate validate .\samples\profile-engine\workstation.yaml `
-  --var developerName=Roman `
-  --var mode=true
-```
-
-Подробнее: [`docs/PROFILE_ENGINE.md`](docs/PROFILE_ENGINE.md).
-
-## ✅ Что уже работает
-
-| Возможность | Статус |
-|---|---|
-| Интерактивная панель со стрелками | ✅ |
-| Большой символьный логотип и отдельные экраны | ✅ |
-| Анимации загрузки и операций | ✅ |
-| CLI-режим для автоматизации | ✅ |
-| Profile Engine: includes / extends | ✅ |
-| Variables и normalization | ✅ |
-| Dependency injection и logging | ✅ |
-| SQLite и миграции | ✅ |
-| Doctor / config / storage | ✅ |
-| Linux + Windows CI | ✅ |
-| Изменение системных настроек Windows | ⏭️ следующий vertical slice |
-
-## 🚀 Быстрый старт
+## 🖥️ Запуск
 
 Требуется **.NET 8 SDK**.
 
@@ -134,48 +50,225 @@ dotnet test -c Release
 dotnet run --project src/WinState.Cli
 ```
 
-Для отдельного рабочего каталога:
+Без аргументов открывается полноэкранный **WinState Control Center** с большим символьным логотипом, стрелочным меню, отдельными страницами и анимациями операций.
+
+| Клавиша | Действие |
+|---|---|
+| `↑` / `↓` | перемещение по меню |
+| `Enter` | открыть раздел |
+| `Y/N` | подтвердить или отменить системную операцию |
+| `Ctrl+C` | безопасно отменить текущий сценарий |
+
+## 🧭 Разделы Control Center
+
+- **Обзор системы** — платформа, SQLite, профили и готовность providers;
+- **Центр профилей** — загрузка и проверка YAML;
+- **Environment Center** — plan, apply, status и rollback;
+- **Диагностика** — Doctor с цветными статусами;
+- **Хранилище** — миграции, таблицы и размер базы;
+- **Конфигурация** — вычисленные каталоги и параметры;
+- **Архитектура и roadmap** — карта модулей и следующий этап.
+
+## 🛡️ Безопасный Environment Provider
+
+### Что поддерживается
+
+- User environment variables;
+- Machine environment variables;
+- User `PATH` entries;
+- Machine `PATH` entries;
+- создание и изменение переменных;
+- добавление, удаление и перестановка конкретных PATH entries;
+- checkpoint, verification и rollback;
+- SQLite transaction history.
+
+Неописанные переменные и неизвестные элементы PATH не удаляются.
+
+### User scope
+
+```yaml
+environment:
+  user:
+    DEV_MODE: "true"
+
+  userPath:
+    - path: "C:\\Dev\\bin"
+      state: present
+      position: append
+```
+
+User actions имеют risk level `Low`, но всё равно требуют явного подтверждения.
+
+### Machine scope
+
+```yaml
+environment:
+  machine:
+    COMPANY_MODE: "managed"
+```
+
+Machine actions имеют risk level `Medium`, помечаются `RequiresAdministrator` и требуют отдельного подтверждения. CLI требует `--allow-machine`, а терминал должен быть запущен от имени администратора.
+
+## 🚀 CLI-сценарий
+
+Проверить provider:
 
 ```powershell
-dotnet run --project src/WinState.Cli -- --home .\.winstate-dev
+winstate environment status
 ```
+
+Построить план без изменений:
+
+```powershell
+winstate environment plan `
+  .\samples\environment-provider\user-sandbox.yaml
+```
+
+Применить после просмотра:
+
+```powershell
+winstate environment apply `
+  .\samples\environment-provider\user-sandbox.yaml `
+  --yes
+```
+
+Посмотреть checkpoint:
+
+```powershell
+winstate environment checkpoints
+```
+
+Откатить транзакцию:
+
+```powershell
+winstate environment rollback `
+  .\.winstate\backups\environment\<transaction>\manifest.json `
+  --yes
+```
+
+Сокращение `env` работает так же, как `environment`.
+
+## 💾 Checkpoint и история
+
+Перед первым изменением WinState создаёт каталог:
+
+```text
+<WINSTATE_HOME>/backups/environment/<transaction-id>/
+├── manifest.json
+├── env-create-....json
+├── env-modify-....json
+└── env-remove-....json
+```
+
+Для переменной сохраняются старое значение и факт её существования. Для PATH сохраняется полный список entries соответствующего scope.
+
+SQLite хранит:
+
+- `Transactions` — итог сценария;
+- `TransactionActions` — результат каждого действия;
+- `ActionBackups` — ссылки на checkpoint.
+
+## 🧩 Profile Engine
+
+Полный YAML Profile Engine из версии `0.3` остаётся основой provider-сценариев:
+
+- `includes` и `extends`;
+- защита от циклов;
+- `{{name}}` и `${name}`;
+- `WINSTATE_VAR_*`;
+- `--var name=value`;
+- объединение profile layers;
+- нормализация и дедупликация PATH.
+
+```powershell
+winstate validate .\samples\profile-engine\workstation.yaml `
+  --var developerName=Roman `
+  --var mode=true
+```
+
+## ✅ Текущее состояние
+
+| Возможность | Статус |
+|---|---|
+| Интерактивный Control Center | ✅ |
+| Стрелочное управление, панели и анимации | ✅ |
+| Полный YAML Profile Engine | ✅ |
+| Environment discovery и diff | ✅ |
+| Risk-aware execution plan | ✅ |
+| User/Machine variables | ✅ |
+| PATH add/remove/reorder | ✅ |
+| Checkpoint перед apply | ✅ |
+| Post-apply verification | ✅ |
+| Автоматический и ручной rollback | ✅ |
+| SQLite transaction history | ✅ |
+| Linux + Windows CI | ✅ |
+| Общий cross-provider Apply Engine | ⏭️ следующий этап |
+
+## 🧪 Проверки
+
+GitHub Actions выполняет на Ubuntu и Windows:
+
+```text
+restore → build with warnings-as-errors → unit tests
+        → Profile Engine → terminal render → Doctor → SQLite
+```
+
+На Windows дополнительно выполняется настоящий временный User-scope сценарий:
+
+```text
+environment plan
+→ apply
+→ checkpoint
+→ verification
+→ rollback
+→ assert variable and PATH restored
+```
+
+Unit-тесты Environment Provider используют in-memory store и покрывают diff, no-op, risk, apply, verify и rollback без изменения машины разработчика.
 
 ## 🧱 Архитектура
 
 ```text
-WinState.Terminal  → панели, меню, анимации
+WinState.Terminal
         ↓
-WinState.App       → DI и прикладные сценарии
+WinState.App workflows
         ↓
-WinState.Core      → Profile Engine и planning
-        ├── WinState.Infrastructure → config и platform paths
-        ├── WinState.Storage        → SQLite и migrations
-        └── WinState.Domain         → модели и provider contracts
+WinState.Core ───────────── Profile Engine / validation / planning
+        ├── WinState.Providers.Environment
+        ├── WinState.Infrastructure
+        ├── WinState.Storage ───────── SQLite history / migrations
+        └── WinState.Domain ────────── resources / actions / providers
 ```
 
-Интерактивный UI не содержит бизнес-логики: все операции выполняются через `WinStateApplication`.
+UI не содержит системной бизнес-логики: CLI и Control Center вызывают один `EnvironmentWorkflow`.
 
-## 🛡️ Безопасность
+## ⚠️ Ограничения alpha-версии
 
-Текущая версия **не изменяет настройки Windows**. Перед первым системным провайдером будут обязательны execution plan, оценка риска, checkpoint, verification и rollback. WinState не хранит секреты в профилях, логах или SQLite и не заменяет полноценный backup.
+- системный apply доступен только для environment-секции;
+- нет secrets adapter;
+- нет удаления обычной переменной через profile state;
+- нет общего resume/reboot engine;
+- Machine scope зависит от реальных прав процесса;
+- WinState не заменяет полный backup Windows.
 
 ## 🗺️ Следующий этап
 
-Первый полный vertical slice — **Environment Provider**:
+`0.5.0-alpha.1` — общий **Apply Engine**:
 
 ```text
-Discover → Diff → Plan → Confirm → Apply → Verify → Rollback
+multiple providers → unified transaction → risk groups
+                   → dependency execution → resume/reboot → rollback
 ```
 
-Он добавит реальное управление пользовательскими и системными переменными окружения, включая PATH, но только после безопасного плана и резервирования предыдущего состояния.
+Подробнее: [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
 
-## 📦 Сборка portable ZIP
+## 📦 Portable ZIP
 
 ```powershell
 .\scripts\package.ps1
 ```
 
-Архив и SHA-256 появятся в `artifacts/`.
+Архив и SHA-256 создаются в `artifacts/`.
 
 ## 📄 Лицензия
 

@@ -67,6 +67,7 @@ internal static class WinStateCli
                 "ui" => await UiAsync(application, invocation.Arguments, cancellationToken),
                 "doctor" => await DoctorAsync(application, cancellationToken),
                 "validate" => await ValidateAsync(application, invocation.Arguments, invocation.Variables, cancellationToken),
+                "environment" or "env" => await EnvironmentAsync(application, invocation, cancellationToken),
                 "config" => Config(application, invocation.Arguments),
                 "storage" => await StorageAsync(application, invocation.Arguments, cancellationToken),
                 _ => Unknown(command)
@@ -77,7 +78,12 @@ internal static class WinStateCli
             Console.Error.WriteLine("[CANCELLED] Операция отменена пользователем.");
             return 130;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidDataException)
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or ArgumentException
+            or InvalidDataException
+            or InvalidOperationException
+            or PlatformNotSupportedException)
         {
             Console.Error.WriteLine($"[ERROR] {exception.Message}");
             return 4;
@@ -156,6 +162,185 @@ internal static class WinStateCli
         return 3;
     }
 
+    private static async Task<int> EnvironmentAsync(
+        WinStateApplication application,
+        CliInvocation invocation,
+        CancellationToken cancellationToken)
+    {
+        var arguments = invocation.Arguments;
+        var subcommand = arguments.Count > 1 ? arguments[1].ToLowerInvariant() : "status";
+        if (subcommand == "status")
+        {
+            var status = await application.GetEnvironmentStatusAsync(cancellationToken);
+            Console.WriteLine("WINSTATE ENVIRONMENT PROVIDER");
+            Console.WriteLine(new string('─', 64));
+            Console.WriteLine($"Platform support: {(status.IsSupported ? "YES" : "NO")}");
+            Console.WriteLine($"User variables:   {status.UserVariables}");
+            Console.WriteLine($"Machine variables:{status.MachineVariables}");
+            Console.WriteLine($"User PATH entries:{status.UserPathEntries}");
+            Console.WriteLine($"Machine PATH:     {status.MachinePathEntries}");
+            foreach (var diagnostic in status.Diagnostics)
+            {
+                Console.WriteLine($"[{(diagnostic.IsWarning ? "WARN" : "INFO")}] {diagnostic.Message}");
+            }
+
+            return 0;
+        }
+
+        if (subcommand == "checkpoints")
+        {
+            var checkpoints = await application.ListEnvironmentCheckpointsAsync(cancellationToken);
+            if (checkpoints.Count == 0)
+            {
+                Console.WriteLine("Environment checkpoints не найдены.");
+                return 0;
+            }
+
+            foreach (var checkpoint in checkpoints)
+            {
+                Console.WriteLine(
+                    $"{checkpoint.CreatedAt:yyyy-MM-dd HH:mm:ss}  {checkpoint.Status,-15}  "
+                    + $"{checkpoint.TransactionId}  {checkpoint.ProfileName}");
+                Console.WriteLine($"  {checkpoint.ManifestPath}");
+            }
+
+            return 0;
+        }
+
+        if (subcommand == "rollback")
+        {
+            if (arguments.Count < 3)
+            {
+                Console.Error.WriteLine("Использование: winstate environment rollback <manifest|directory> --yes");
+                return 2;
+            }
+
+            if (!invocation.AssumeYes)
+            {
+                Console.Error.WriteLine("[SAFEGUARD] Rollback требует явный флаг --yes.");
+                return 2;
+            }
+
+            var result = await application.RollbackEnvironmentAsync(arguments[2], cancellationToken);
+            PrintExecution(result);
+            return result.Succeeded ? 0 : 7;
+        }
+
+        if (subcommand is not ("plan" or "apply"))
+        {
+            Console.Error.WriteLine(
+                "Использование: winstate environment [status|plan <profile>|apply <profile> --yes|checkpoints|rollback <checkpoint> --yes]");
+            return 2;
+        }
+
+        if (arguments.Count < 3)
+        {
+            Console.Error.WriteLine($"Использование: winstate environment {subcommand} <profile>");
+            return 2;
+        }
+
+        var plan = await application.PlanEnvironmentAsync(
+            arguments[2],
+            invocation.Variables,
+            cancellationToken);
+        PrintEnvironmentPlan(plan);
+        if (!plan.Validation.IsValid)
+        {
+            return 3;
+        }
+
+        if (!plan.IsSupported)
+        {
+            return 6;
+        }
+
+        if (subcommand == "plan")
+        {
+            return 0;
+        }
+
+        if (!invocation.AssumeYes)
+        {
+            Console.Error.WriteLine("[SAFEGUARD] Apply требует явный флаг --yes после просмотра плана.");
+            return 2;
+        }
+
+        var hasMachineActions = plan.Actions.Any(action => action.RequiresAdministrator);
+        if (hasMachineActions && !invocation.AllowMachine)
+        {
+            Console.Error.WriteLine(
+                "[SAFEGUARD] План содержит Machine scope. Добавьте --allow-machine и запустите терминал от администратора.");
+            return 2;
+        }
+
+        var execution = await application.ApplyEnvironmentAsync(
+            arguments[2],
+            invocation.Variables,
+            invocation.AllowMachine,
+            invocation.AutomaticRollback,
+            cancellationToken);
+        PrintExecution(execution);
+        return execution.Succeeded ? 0 : 7;
+    }
+
+    private static void PrintEnvironmentPlan(EnvironmentPlanReport plan)
+    {
+        Console.WriteLine("WINSTATE ENVIRONMENT PLAN");
+        Console.WriteLine(new string('─', 80));
+        Console.WriteLine($"Профиль:     {plan.Loaded.Profile.Metadata.Name}");
+        Console.WriteLine($"Поддержка:   {(plan.IsSupported ? "Windows provider ready" : "unsupported platform")}");
+        Console.WriteLine($"Изменения:   {plan.Summary.Changes}");
+        Console.WriteLine($"Machine:     {plan.Summary.AdministratorActions}");
+        Console.WriteLine($"Max risk:    {plan.Summary.MaximumRisk}");
+        foreach (var issue in plan.Validation.Issues)
+        {
+            Console.WriteLine($"[ERROR] {issue.Path}: {issue.Message}");
+        }
+
+        foreach (var diagnostic in plan.Diagnostics)
+        {
+            Console.WriteLine($"[{(diagnostic.IsWarning ? "WARN" : "INFO")}] {diagnostic.Message}");
+        }
+
+        foreach (var action in plan.Actions)
+        {
+            var scope = Property(action, "scope");
+            var resource = action.Resource.ResourceType.EndsWith("variable", StringComparison.Ordinal)
+                ? Property(action, "name")
+                : Property(action, "path");
+            Console.WriteLine(
+                $"[{action.Risk,-6}] {scope,-7} {action.Operation,-8} {resource}");
+            Console.WriteLine($"         {action.Explanation}");
+        }
+
+        if (plan.Actions.Count == 0 && plan.Validation.IsValid && plan.IsSupported)
+        {
+            Console.WriteLine("[OK] Изменения не требуются.");
+        }
+    }
+
+    private static void PrintExecution(EnvironmentExecutionReport result)
+    {
+        Console.WriteLine(new string('─', 80));
+        Console.WriteLine($"Transaction: {result.TransactionId}");
+        Console.WriteLine($"Profile:     {result.ProfileName}");
+        Console.WriteLine($"Succeeded:   {result.Succeeded}");
+        Console.WriteLine($"Verified:    {result.Verified}");
+        Console.WriteLine($"Rolled back: {result.RolledBack}");
+        Console.WriteLine($"Checkpoint:  {result.CheckpointManifest ?? "none"}");
+        foreach (var action in result.Actions)
+        {
+            Console.WriteLine($"[{action.Status}] {action.ActionId}: {action.Message}");
+        }
+
+        Console.WriteLine(result.Message);
+    }
+
+    private static string Property(WinState.Domain.Planning.PlannedAction action, string name)
+        => action.Resource.Properties.TryGetValue(name, out var value)
+            ? value.Value ?? string.Empty
+            : string.Empty;
+
     private static int Config(WinStateApplication application, IReadOnlyList<string> arguments)
     {
         var subcommand = arguments.Count > 1 ? arguments[1].ToLowerInvariant() : "show";
@@ -226,46 +411,60 @@ internal static class WinStateCli
           winstate doctor [--home <path>]        Проверить конфигурацию и SQLite
           winstate validate <profile>            Загрузить и проверить полный YAML
                     [--var name=value]            Переопределить переменную профиля
+          winstate environment status            Показать состояние Environment Provider
+          winstate environment plan <profile>    Построить безопасный execution plan
+          winstate environment apply <profile>   Применить после просмотра плана
+                    --yes [--allow-machine]       Явное подтверждение scope
+          winstate environment checkpoints       Показать доступные checkpoint
+          winstate environment rollback <path>   Восстановить checkpoint с --yes
           winstate config [show|path]            Показать вычисленные настройки
           winstate storage [migrate|status]      Управлять локальной схемой SQLite
+
+        Безопасность apply:
+          --yes               подтверждает применение показанного плана
+          --allow-machine     разрешает Machine scope (нужен запуск от администратора)
+          --no-auto-rollback  отключает автоматический откат при ошибке
 
         Управление панелью:
           ↑ / ↓     перемещение
           ENTER     открыть выбранный раздел
           любая клавиша — вернуться в главное меню
-
-        Profile Engine:
-          includes, extends, variables, WINSTATE_VAR_*, normalization
         """);
     }
 
     private static void PrintArchitecture()
     {
         Console.WriteLine("""
-        Terminal UI → App composition root → Core engines
-                          │                 │
-                          ├─ Infrastructure └─ Domain contracts
-                          └─ SQLite Storage
+        Terminal UI → App workflows → Core engines → Provider contracts
+                          │                │                 │
+                          ├─ Infrastructure└─ Profile Engine └─ Environment Provider
+                          └─ SQLite Storage + transaction history
 
-        Terminal:       панели, меню, анимации и стрелочное управление
-        App:            DI, logging и прикладные сценарии
-        Core:           Profile Engine, validation и planning
-        Infrastructure: конфигурация, пути и платформенные адаптеры
-        Storage:        SQLite, миграции, ownership и история
-        Domain:         модели и provider contracts
+        Terminal:       панели, меню, подтверждения и анимации
+        App:            DI, plan/checkpoint/apply/verify/rollback orchestration
+        Core:           Profile Engine, validation и dependency graph
+        Environment:    User/Machine variables и PATH
+        Storage:        SQLite, action results и backup references
+        Domain:         модели, risks и provider contracts
         """);
     }
 
     private sealed record CliInvocation(
         IReadOnlyList<string> Arguments,
         string? HomeOverride,
-        IReadOnlyDictionary<string, string> Variables)
+        IReadOnlyDictionary<string, string> Variables,
+        bool AssumeYes,
+        bool AllowMachine,
+        bool AutomaticRollback)
     {
         public static CliInvocation Parse(IReadOnlyList<string> args)
         {
             var filtered = new List<string>();
             var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             string? home = null;
+            var assumeYes = false;
+            var allowMachine = false;
+            var automaticRollback = true;
             for (var index = 0; index < args.Count; index++)
             {
                 if (args[index].Equals("--home", StringComparison.OrdinalIgnoreCase))
@@ -297,10 +496,34 @@ internal static class WinStateCli
                     continue;
                 }
 
+                if (args[index].Equals("--yes", StringComparison.OrdinalIgnoreCase))
+                {
+                    assumeYes = true;
+                    continue;
+                }
+
+                if (args[index].Equals("--allow-machine", StringComparison.OrdinalIgnoreCase))
+                {
+                    allowMachine = true;
+                    continue;
+                }
+
+                if (args[index].Equals("--no-auto-rollback", StringComparison.OrdinalIgnoreCase))
+                {
+                    automaticRollback = false;
+                    continue;
+                }
+
                 filtered.Add(args[index]);
             }
 
-            return new CliInvocation(filtered, home, variables);
+            return new CliInvocation(
+                filtered,
+                home,
+                variables,
+                assumeYes,
+                allowMachine,
+                automaticRollback);
         }
     }
 }
