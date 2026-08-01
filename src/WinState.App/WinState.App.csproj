@@ -3,6 +3,7 @@
     <Description>Композиция приложения и прикладные сценарии WinState.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\WinState.Apply\WinState.Apply.csproj" />
     <ProjectReference Include="..\WinState.Core\WinState.Core.csproj" />
     <ProjectReference Include="..\WinState.Domain\WinState.Domain.csproj" />
     <ProjectReference Include="..\WinState.Infrastructure\WinState.Infrastructure.csproj" />
