@@ -1,0 +1,114 @@
+name: publish-v0.8.0-alpha.1
+
+on:
+  push:
+    branches:
+      - release/v0.8.0-alpha.1
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    env:
+      VERSION: 0.8.0-alpha.1
+      TAG: v0.8.0-alpha.1
+      TARGET_SHA: 9ff95700dced0c981305f9d4e001b2147c324e44
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore WinState.sln
+
+      - name: Build
+        run: dotnet build WinState.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test WinState.sln --configuration Release --no-build
+
+      - name: Build portable packages
+        shell: pwsh
+        run: |
+          .\scripts\package.ps1 -Runtime win-x64 -Version $env:VERSION
+          .\scripts\package.ps1 -Runtime win-arm64 -Version $env:VERSION
+
+          $archives = Get-ChildItem -LiteralPath artifacts -Filter '*.zip' -File | Sort-Object Name
+          if ($archives.Count -ne 2) { throw "Expected two portable ZIP archives, found $($archives.Count)." }
+
+          $lines = foreach ($archive in $archives) {
+            $hash = (Get-FileHash -LiteralPath $archive.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($archive.Name)"
+          }
+          $lines | Set-Content -LiteralPath artifacts/SHA256SUMS -Encoding ascii
+
+      - name: Validate packages
+        shell: pwsh
+        run: |
+          foreach ($runtime in @('win-x64', 'win-arm64')) {
+            $archive = Join-Path $PWD "artifacts/WinState-$env:VERSION-$runtime.zip"
+            $checksum = "$archive.sha256"
+            if (-not (Test-Path -LiteralPath $archive)) { throw "Missing $archive" }
+            if (-not (Test-Path -LiteralPath $checksum)) { throw "Missing $checksum" }
+
+            $extract = Join-Path $PWD ".release-check-$runtime"
+            Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+            if (-not (Test-Path (Join-Path $extract 'winstate.exe'))) { throw "winstate.exe missing in $runtime package." }
+            if (-not (Test-Path (Join-Path $extract 'winstate.release.json'))) { throw "release marker missing in $runtime package." }
+          }
+
+      - name: Write release notes
+        shell: pwsh
+        run: |
+          @'
+          ## WinState 0.8.0-alpha.1 — Windows System Control
+
+          ### Новое
+
+          - allowlisted Registry values in `HKCU\Software` and `HKLM\SOFTWARE`;
+          - Windows Services state and start mode management;
+          - Startup entries with exact backup and rollback;
+          - Scheduled Tasks for logon, startup and daily schedules;
+          - unified risk/admin gates, checkpoint barrier, verification and rollback;
+          - compatible YAML loader with includes, extends and variables;
+          - new tests, safe sample and System Control documentation.
+
+          ### Assets
+
+          - `WinState-0.8.0-alpha.1-win-x64.zip` — self-contained portable Windows x64;
+          - `WinState-0.8.0-alpha.1-win-arm64.zip` — self-contained portable Windows ARM64;
+          - individual `.sha256` files and consolidated `SHA256SUMS`.
+
+          This is an alpha prerelease. Registry is intentionally limited to the Software allowlist, and service definitions are not created or deleted.
+          '@ | Set-Content -LiteralPath RELEASE_NOTES.md -Encoding utf8
+
+      - name: Create tag and GitHub Release
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a $env:TAG $env:TARGET_SHA -m "WinState $env:VERSION — Windows System Control"
+          git push origin "refs/tags/$env:TAG"
+
+          $assets = Get-ChildItem -LiteralPath artifacts -File |
+            Where-Object { $_.Name -like '*.zip' -or $_.Name -like '*.zip.sha256' -or $_.Name -eq 'SHA256SUMS' } |
+            Sort-Object Name |
+            ForEach-Object { $_.FullName }
+
+          gh release create $env:TAG @assets `
+            --repo $env:GITHUB_REPOSITORY `
+            --title "WinState $env:VERSION — Windows System Control" `
+            --notes-file RELEASE_NOTES.md `
+            --prerelease `
+            --verify-tag
