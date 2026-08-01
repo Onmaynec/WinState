@@ -1,6 +1,6 @@
 # 🏗️ Архитектура WinState
 
-> Текущий статус: **`0.6.0-alpha.1` — Nexus UI, Unified Apply Engine и Update Uplink**.
+> Текущий статус: **`0.7.0-alpha.1` — Forge UI, три production providers, Unified Apply Engine и Update Uplink**.
 
 ## Общий pipeline
 
@@ -14,7 +14,7 @@ Provider Discovery → Provider Plans
 WinState.Apply
     ├─ merge execution graph
     ├─ dependency validation/sort
-    ├─ risk groups and policy gates
+    ├─ risk/admin/irreversible policy gates
     ├─ checkpoint barrier
     ├─ apply + verify
     ├─ persisted manifest / resume
@@ -23,10 +23,18 @@ WinState.Apply
 SQLite history + provider backup payloads
 ```
 
-Update pipeline существует отдельно от system apply:
+Зарегистрированные production providers:
 
 ```text
-Cyber Nexus → WinState.Update → GitHub Releases
+environment        → Windows environment variables и PATH
+packages.winget    → winget.exe package lifecycle
+windows.features   → dism.exe Optional Features
+```
+
+Update pipeline отделён от system apply:
+
+```text
+Forge/Nexus → WinState.Update → GitHub Releases
                            → ZIP + SHA-256
                            → safe staging
                            → external updater process
@@ -36,15 +44,17 @@ Cyber Nexus → WinState.Update → GitHub Releases
 
 | Модуль | Ответственность | Не должен содержать |
 |---|---|---|
-| `WinState.Domain` | resources, actions, risks, provider/transaction contracts | YAML, Windows API, UI, HTTP, SQLite |
+| `WinState.Domain` | resources, profile records, actions, risks и provider contracts | YAML, Windows API, UI, HTTP, SQLite |
 | `WinState.Core` | Profile Engine, validation и plan primitives | concrete providers и UI |
-| `WinState.Apply` | unified graph, transaction manifest, resume и rollback | YAML, Spectre.Console, provider-specific API |
-| `WinState.Update` | release discovery, SemVer, download, SHA-256, staging/updater | system configuration apply |
+| `WinState.Apply` | unified graph, policy validation, manifests, resume и rollback | YAML, Spectre.Console, provider-specific API |
+| `WinState.Update` | release discovery, SemVer, SHA-256 и staging/updater | system configuration apply |
 | `WinState.Infrastructure` | settings и platform paths | Terminal UI |
 | `WinState.Storage` | SQLite migrations и transaction history | UI и provider implementation |
-| `WinState.Providers.Environment` | User/Machine variables и PATH | UI и common transaction orchestration |
-| `WinState.App` | composition root и workflow adapters | terminal rendering |
-| `WinState.Terminal` | Nexus/Cyber UI, prompts, traces и animations | Windows API и raw SQL |
+| `WinState.Providers.Environment` | variables и PATH | common orchestration |
+| `WinState.Providers.Packages` | WinGet discovery/apply/verify/rollback boundary | UI и transaction engine |
+| `WinState.Providers.Features` | DISM discovery/enable/disable/verify/rollback | UI и transaction engine |
+| `WinState.App` | composition root, adapters и workflows | terminal rendering |
+| `WinState.Terminal` | Forge/Nexus/Cyber UI, prompts и traces | Windows API и raw SQL |
 | `WinState.Cli` | entry point, flags и automation output | provider implementation |
 
 ## Dependency direction
@@ -58,12 +68,14 @@ WinState.App
     ├──────────────→ WinState.Apply
     ├──────────────→ WinState.Core
     ├──────────────→ WinState.Storage
-    └──────────────→ Providers.Environment
-                          ↓
-                    WinState.Domain
+    ├──────────────→ Providers.Environment
+    ├──────────────→ Providers.Packages
+    └──────────────→ Providers.Features
+                           ↓
+                     WinState.Domain
 ```
 
-`Domain` остаётся нижним слоем. `Apply` зависит только от Domain contracts. `Update` — самостоятельная библиотека без зависимости от application state engine.
+`Domain` остаётся нижним слоем. `Apply` зависит только от Domain contracts. Provider projects не знают о UI, SQLite и application workflow.
 
 ## Provider adapter boundary
 
@@ -73,7 +85,7 @@ Common engine работает через:
 IApplyProviderExecutor
 ```
 
-Adapter предоставляет:
+Каждый adapter реализует:
 
 ```text
 PrepareRollbackAsync
@@ -82,44 +94,94 @@ VerifyAsync
 RollbackAsync
 ```
 
-В `0.6`:
+В `0.7` зарегистрированы:
 
 ```text
-EnvironmentApplyExecutor
-        ↓
-EnvironmentStateProvider
-        ├─ WindowsEnvironmentStore
-        └─ InMemoryEnvironmentStore
+EnvironmentApplyExecutor     → EnvironmentStateProvider
+WingetApplyExecutor          → WingetPackageProvider
+WindowsFeatureApplyExecutor  → WindowsFeatureProvider
 ```
 
-Будущие WinGet и Optional Features providers зарегистрируют собственные executors.
+Системный доступ дополнительно скрыт за тестируемыми interfaces:
+
+```text
+IEnvironmentStore
+IWingetClient
+IWindowsFeatureClient
+```
+
+Production implementations вызывают Windows API/CLI. Unit-тесты используют in-memory/fake implementations.
+
+## Profile composition
+
+`ProfileEngine` объединяет sections из `extends` и `includes`:
+
+```text
+environment → dictionary/path merge
+packages    → overlay by source + package ID
+features    → overlay by feature name
+```
+
+После variable resolution данные преобразуются в immutable domain records и проходят `ProfileValidator`.
+
+## WinGet boundary
+
+```text
+WingetPackageProvider
+       ↓
+ProcessWingetClient
+       ↓
+winget.exe + ProcessStartInfo.ArgumentList
+```
+
+Provider создаёт actions:
+
+```text
+Install   → reversible for packages absent before transaction
+Update    → irreversible
+Uninstall → irreversible
+```
+
+Upgrade/uninstall не получают фиктивный checkpoint. Общий engine видит `SupportsRollback = false` и включает irreversible policy gate.
+
+## Optional Features boundary
+
+```text
+WindowsFeatureProvider
+       ↓
+DismWindowsFeatureClient
+       ↓
+dism.exe /Online /English /NoRestart
+```
+
+Checkpoint сохраняет исходное Enabled/Disabled state. Rollback выполняет противоположную DISM-операцию при необходимости. Exit code `3010` фиксирует reboot requirement, но не инициирует reboot.
 
 ## Unified execution graph
 
 `ApplyEngine.BuildPlan`:
 
-1. проверяет `ActionId`;
+1. проверяет уникальность `ActionId`;
 2. проверяет `DependsOn`;
-3. обнаруживает cycle;
+3. обнаруживает cycles;
 4. делает deterministic topological sort;
-5. выделяет provider set;
+5. вычисляет provider set;
 6. строит risk groups;
 7. вычисляет admin/reboot/irreversible flags.
 
-Provider-specific порядок может быть выражен только dependencies, а не скрытым UI-поведением.
+Provider-specific порядок выражается dependencies, а не скрытым поведением UI.
 
 ## Checkpoint barrier
 
 ```text
-Prepare provider A action 1
-Prepare provider B action 2
-Prepare provider A action 3
-Persist manifest
-============================ no mutation above this line
-Apply action 1
+Prepare environment action
+Prepare WinGet install action
+Prepare Optional Feature action
+Persist transaction.json
+================================ no mutation above this line
+Apply first action
 ```
 
-Отсутствующий обязательный checkpoint блокирует всю транзакцию.
+Отсутствующий checkpoint обратимого action блокирует всю транзакцию. Необратимое действие допускается только после отдельного policy authorization.
 
 ## Persisted transaction
 
@@ -128,62 +190,29 @@ Apply action 1
 ├── transaction.json
 └── providers/
     ├── environment/
-    └── <provider-id>/
+    ├── packages.winget/
+    └── windows.features/
 ```
 
-Manifest обновляется после каждого verified action через temporary file и replacement. Это позволяет продолжить graph после controlled interruption.
+Manifest обновляется после каждого verified action через temporary file и atomic replacement.
 
-## Transaction statuses
+## Forge frontend boundary
 
-Используются domain statuses:
+`CyberForgeShell` показывает:
 
-```text
-Planned
-Running
-Succeeded
-SucceededRebootPending
-Partial
-Failed
-Cancelled
-RolledBack
-RollbackFailed
-VerificationFailed
-```
+- верхний Forge Control Fabric;
+- Package & Feature Forge;
+- provider support и inventory counters;
+- unified action/risk table;
+- admin/reboot/irreversible gates;
+- фактический execution trace;
+- переход в прежний Nexus Control Fabric.
 
-`SucceededRebootPending` не означает автоматическую перезагрузку.
-
-## Nexus frontend boundary
-
-`CyberNexusShell` показывает:
-
-- Nexus telemetry;
-- Transaction Matrix;
-- execution graph/risk tables;
-- action trace;
-- Update Uplink;
-- boot/shutdown animations.
-
-Он не создаёт provider actions, backups, SQL или update checksum. Presentation вызывает публичные services и отображает фактические results.
-
-Прежний `CyberTerminalShell` сохранён как вложенный `[01] CYBER CONTROL CENTER`.
-
-## Update boundary
-
-`UpdateService`:
-
-- читает только GitHub Releases API;
-- сравнивает SemVer;
-- выбирает runtime ZIP;
-- проверяет SHA-256;
-- безопасно распаковывает staging payload;
-- требует release marker;
-- запускает updater process только в Windows release build.
-
-Source mode не может заменить repository files.
+Frontend не создаёт actions, backup payloads, DISM/WinGet commands или SQL. Он вызывает только `WinStateApplication`.
 
 ## Storage
 
-SQLite по-прежнему хранит:
+SQLite хранит:
 
 ```text
 Transactions
@@ -191,31 +220,33 @@ TransactionActions
 ActionBackups
 ```
 
-Common Apply workflow записывает provider ID, status, message/timestamps и backup reference. Полный resumable manifest остаётся файловым, поскольку обновляется чаще и должен быть доступен до и независимо от SQLite history commit.
+File manifest остаётся источником resume, а SQLite — долговременной history.
 
 ## Архитектурные инварианты
 
 1. **Plan before mutation.**
-2. **All checkpoints before first apply.**
+2. **All reversible checkpoints before first apply.**
 3. **Verification before success.**
-4. **Policy gates outside providers.**
-5. **Provider identity on every action.**
-6. **Deterministic dependency order.**
-7. **Persist progress after each verified action.**
-8. **Reverse graph rollback.**
-9. **No silent elevation or reboot.**
-10. **UI is never the source of truth.**
-11. **Source checkout is never self-overwritten.**
-12. **Update package must pass SHA-256 and marker checks.**
+4. **Irreversible operations are declared honestly.**
+5. **Policy gates live outside providers.**
+6. **Provider identity exists on every action.**
+7. **Deterministic dependency order.**
+8. **Persist progress after every verified action.**
+9. **Reverse graph rollback.**
+10. **No silent elevation or reboot.**
+11. **UI is never the source of truth.**
+12. **Unknown packages are not removed without ownership data.**
+13. **Source checkout is never self-overwritten.**
+14. **Update payload must pass SHA-256 and marker checks.**
 
 ## Следующий этап
 
-`0.7.0-alpha.1` подключит к common engine новые adapters:
+`0.8.0-alpha.1` расширит provider set:
 
 ```text
-WinGet Provider
-Windows Optional Features Provider
-WSL prerequisite planner
-package ownership policy
-reboot grouping
+allowlisted Registry
+Windows Services
+Startup entries
+Scheduled Tasks
+→ ownership markers → backup payloads → unified verification/rollback
 ```
