@@ -5,6 +5,8 @@ using WinState.Domain.Planning;
 using WinState.Domain.Providers;
 using WinState.Infrastructure.Configuration;
 using WinState.Providers.EnvironmentVariables;
+using WinState.Providers.Features;
+using WinState.Providers.Packages;
 using WinState.Storage;
 
 namespace WinState.App;
@@ -23,6 +25,16 @@ public sealed record UnifiedApplyStatusReport(
     int RebootPendingTransactions,
     IReadOnlyList<ApplyTransactionManifest> RecentTransactions);
 
+public sealed record SystemProvidersStatusReport(
+    bool EnvironmentSupported,
+    bool WingetSupported,
+    bool FeaturesSupported,
+    int InstalledPackages,
+    int PackagesWithUpdates,
+    int EnabledFeatures,
+    int DisabledFeatures,
+    IReadOnlyCollection<ProviderDiagnostic> Diagnostics);
+
 public sealed class EnvironmentApplyExecutor : IApplyProviderExecutor
 {
     private readonly EnvironmentStateProvider _provider;
@@ -34,47 +46,57 @@ public sealed class EnvironmentApplyExecutor : IApplyProviderExecutor
 
     public string ProviderId => EnvironmentProfileMapper.ProviderId;
     public bool IsSupported => _provider.IsSupported;
-
-    public Task<RollbackPreparationResult> PrepareRollbackAsync(
-        PlannedAction action,
-        ProviderExecutionContext context,
-        CancellationToken cancellationToken)
-        => _provider.PrepareRollbackAsync(action, context, cancellationToken);
-
-    public Task<ActionExecutionResult> ApplyAsync(
-        PlannedAction action,
-        ProviderExecutionContext context,
-        CancellationToken cancellationToken)
-        => _provider.ApplyAsync(action, context, cancellationToken);
-
-    public Task<VerificationResult> VerifyAsync(
-        PlannedAction action,
-        ProviderExecutionContext context,
-        CancellationToken cancellationToken)
-        => _provider.VerifyAsync(action, context, cancellationToken);
-
-    public Task<RollbackExecutionResult> RollbackAsync(
-        RollbackAction action,
-        ProviderExecutionContext context,
-        CancellationToken cancellationToken)
-        => _provider.RollbackAsync(action, context, cancellationToken);
+    public Task<RollbackPreparationResult> PrepareRollbackAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.PrepareRollbackAsync(action, context, cancellationToken);
+    public Task<ActionExecutionResult> ApplyAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.ApplyAsync(action, context, cancellationToken);
+    public Task<VerificationResult> VerifyAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.VerifyAsync(action, context, cancellationToken);
+    public Task<RollbackExecutionResult> RollbackAsync(RollbackAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.RollbackAsync(action, context, cancellationToken);
 }
 
-/// <summary>
-/// Собирает планы нескольких providers и передаёт их общему Apply Engine.
-/// В 0.6 зарегистрирован первый реальный adapter — Environment Provider.
-/// </summary>
+public sealed class WingetApplyExecutor : IApplyProviderExecutor
+{
+    private readonly WingetPackageProvider _provider;
+
+    public WingetApplyExecutor(WingetPackageProvider provider)
+    {
+        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+    }
+
+    public string ProviderId => WingetProfileMapper.ProviderId;
+    public bool IsSupported => _provider.IsSupported;
+    public Task<RollbackPreparationResult> PrepareRollbackAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.PrepareRollbackAsync(action, context, cancellationToken);
+    public Task<ActionExecutionResult> ApplyAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.ApplyAsync(action, context, cancellationToken);
+    public Task<VerificationResult> VerifyAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.VerifyAsync(action, context, cancellationToken);
+    public Task<RollbackExecutionResult> RollbackAsync(RollbackAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.RollbackAsync(action, context, cancellationToken);
+}
+
+public sealed class WindowsFeatureApplyExecutor : IApplyProviderExecutor
+{
+    private readonly WindowsFeatureProvider _provider;
+
+    public WindowsFeatureApplyExecutor(WindowsFeatureProvider provider)
+    {
+        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+    }
+
+    public string ProviderId => WindowsFeatureProfileMapper.ProviderId;
+    public bool IsSupported => _provider.IsSupported;
+    public Task<RollbackPreparationResult> PrepareRollbackAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.PrepareRollbackAsync(action, context, cancellationToken);
+    public Task<ActionExecutionResult> ApplyAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.ApplyAsync(action, context, cancellationToken);
+    public Task<VerificationResult> VerifyAsync(PlannedAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.VerifyAsync(action, context, cancellationToken);
+    public Task<RollbackExecutionResult> RollbackAsync(RollbackAction action, ProviderExecutionContext context, CancellationToken cancellationToken) => _provider.RollbackAsync(action, context, cancellationToken);
+}
+
+/// <summary>Собирает Environment, WinGet и Optional Features в одну транзакцию.</summary>
 public sealed class UnifiedApplyWorkflow
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true
-    };
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     private readonly WinStateOptions _options;
     private readonly ProfileEngine _profileEngine;
     private readonly ProfileValidator _validator;
     private readonly EnvironmentStateProvider _environmentProvider;
+    private readonly WingetPackageProvider _wingetProvider;
+    private readonly WindowsFeatureProvider _featureProvider;
     private readonly ApplyEngine _engine;
     private readonly TransactionHistoryStore _history;
 
@@ -83,14 +105,17 @@ public sealed class UnifiedApplyWorkflow
         ProfileEngine profileEngine,
         ProfileValidator validator,
         EnvironmentStateProvider environmentProvider,
+        WingetPackageProvider wingetProvider,
+        WindowsFeatureProvider featureProvider,
         ApplyEngine engine,
         TransactionHistoryStore history)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _profileEngine = profileEngine ?? throw new ArgumentNullException(nameof(profileEngine));
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
-        _environmentProvider = environmentProvider
-            ?? throw new ArgumentNullException(nameof(environmentProvider));
+        _environmentProvider = environmentProvider ?? throw new ArgumentNullException(nameof(environmentProvider));
+        _wingetProvider = wingetProvider ?? throw new ArgumentNullException(nameof(wingetProvider));
+        _featureProvider = featureProvider ?? throw new ArgumentNullException(nameof(featureProvider));
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _history = history ?? throw new ArgumentNullException(nameof(history));
     }
@@ -108,45 +133,75 @@ public sealed class UnifiedApplyWorkflow
             new ProfileLoadOptions(variables, environment),
             cancellationToken);
         var validation = _validator.Validate(loaded.Profile);
-        if (!validation.IsValid || !_environmentProvider.IsSupported)
+        if (!validation.IsValid)
         {
             return new UnifiedApplyPlanReport(
                 loaded,
                 validation,
-                _engine.BuildPlan(
-                    loaded.Profile.Metadata.Name,
-                    Array.Empty<PlannedAction>()),
-                _environmentProvider.IsSupported
-                    ? Array.Empty<ProviderDiagnostic>()
-                    : [new ProviderDiagnostic(
-                        "apply.environment.unsupported",
-                        "Environment adapter доступен только в Windows.",
-                        true)],
-                _environmentProvider.IsSupported);
+                _engine.BuildPlan(loaded.Profile.Metadata.Name, Array.Empty<PlannedAction>()),
+                Array.Empty<ProviderDiagnostic>(),
+                true);
         }
 
+        var actions = new List<PlannedAction>();
+        var diagnostics = new List<ProviderDiagnostic>();
+        var supported = true;
         var workingDirectory = Path.GetDirectoryName(Path.GetFullPath(profilePath))
             ?? Environment.CurrentDirectory;
-        var discovery = await _environmentProvider.DiscoverAsync(
-            new ProviderContext(
-                loaded.Profile.Metadata.Name,
-                false,
-                workingDirectory),
-            cancellationToken);
-        var environmentActions = await _environmentProvider.PlanAsync(
-            EnvironmentProfileMapper.CreateDesiredState(loaded.Profile),
-            new CurrentProviderState(discovery.Resources),
-            new PlanningContext(
-                loaded.Profile.Settings.StrictMode,
-                false,
-                loaded.Profile.Metadata.Name),
-            cancellationToken);
+        var providerContext = new ProviderContext(
+            loaded.Profile.Metadata.Name,
+            false,
+            workingDirectory);
+        var planningContext = new PlanningContext(
+            loaded.Profile.Settings.StrictMode,
+            false,
+            loaded.Profile.Metadata.Name);
+
+        if (UsesEnvironment(loaded.Profile))
+        {
+            supported &= await AppendPlanAsync(
+                _environmentProvider,
+                EnvironmentProfileMapper.CreateDesiredState(loaded.Profile),
+                "Environment Provider доступен только в Windows.",
+                providerContext,
+                planningContext,
+                actions,
+                diagnostics,
+                cancellationToken);
+        }
+
+        if (loaded.Profile.Packages.Count > 0)
+        {
+            supported &= await AppendPlanAsync(
+                _wingetProvider,
+                WingetProfileMapper.CreateDesiredState(loaded.Profile),
+                "WinGet Provider недоступен. Проверьте Windows App Installer.",
+                providerContext,
+                planningContext,
+                actions,
+                diagnostics,
+                cancellationToken);
+        }
+
+        if (loaded.Profile.Features.Count > 0)
+        {
+            supported &= await AppendPlanAsync(
+                _featureProvider,
+                WindowsFeatureProfileMapper.CreateDesiredState(loaded.Profile),
+                "Windows Features Provider доступен только в Windows.",
+                providerContext,
+                planningContext,
+                actions,
+                diagnostics,
+                cancellationToken);
+        }
+
         return new UnifiedApplyPlanReport(
             loaded,
             validation,
-            _engine.BuildPlan(loaded.Profile.Metadata.Name, environmentActions),
-            discovery.Diagnostics,
-            true);
+            _engine.BuildPlan(loaded.Profile.Metadata.Name, actions),
+            diagnostics,
+            supported);
     }
 
     public async Task<ApplyEngineReport> ApplyAsync(
@@ -157,11 +212,7 @@ public sealed class UnifiedApplyWorkflow
         bool isElevated,
         CancellationToken cancellationToken)
     {
-        var plan = await PlanAsync(
-            profilePath,
-            variables,
-            environment,
-            cancellationToken);
+        var plan = await PlanAsync(profilePath, variables, environment, cancellationToken);
         if (!plan.Validation.IsValid)
         {
             throw new InvalidDataException("Профиль содержит ошибки и не может быть применён.");
@@ -170,14 +221,13 @@ public sealed class UnifiedApplyWorkflow
         if (!plan.IsSupported)
         {
             throw new PlatformNotSupportedException(
-                "Ни один системный provider текущего профиля не поддерживается на этой платформе.");
+                "Один или несколько providers текущего профиля недоступны.");
         }
 
         var report = await _engine.ExecuteAsync(
             new ApplyEngineRequest(
                 plan.Loaded.Profile.Metadata.Name,
-                Path.GetDirectoryName(Path.GetFullPath(profilePath))
-                    ?? Environment.CurrentDirectory,
+                Path.GetDirectoryName(Path.GetFullPath(profilePath)) ?? Environment.CurrentDirectory,
                 Path.Combine(_options.HomeDirectory, "backups"),
                 plan.Plan.OrderedActions,
                 options,
@@ -187,26 +237,21 @@ public sealed class UnifiedApplyWorkflow
         return report;
     }
 
-    public async Task<ApplyEngineReport> ResumeAsync(
-        string manifestPath,
-        CancellationToken cancellationToken)
+    public async Task<ApplyEngineReport> ResumeAsync(string manifestPath, CancellationToken cancellationToken)
     {
         var report = await _engine.ResumeAsync(manifestPath, cancellationToken);
         await RecordHistoryAsync(report, "resume", cancellationToken);
         return report;
     }
 
-    public async Task<ApplyEngineReport> RollbackAsync(
-        string manifestPath,
-        CancellationToken cancellationToken)
+    public async Task<ApplyEngineReport> RollbackAsync(string manifestPath, CancellationToken cancellationToken)
     {
         var report = await _engine.RollbackAsync(manifestPath, cancellationToken);
         await RecordHistoryAsync(report, "unified-rollback", cancellationToken);
         return report;
     }
 
-    public async Task<UnifiedApplyStatusReport> GetStatusAsync(
-        CancellationToken cancellationToken)
+    public async Task<UnifiedApplyStatusReport> GetStatusAsync(CancellationToken cancellationToken)
     {
         var transactions = await _engine.ListTransactionsAsync(
             Path.Combine(_options.HomeDirectory, "backups"),
@@ -227,6 +272,91 @@ public sealed class UnifiedApplyWorkflow
             rebootPending,
             transactions.Take(12).ToArray());
     }
+
+    public async Task<SystemProvidersStatusReport> GetProvidersStatusAsync(
+        CancellationToken cancellationToken)
+    {
+        var diagnostics = new List<ProviderDiagnostic>();
+        var installed = 0;
+        var updates = 0;
+        var enabled = 0;
+        var disabled = 0;
+        if (_wingetProvider.IsSupported)
+        {
+            var discovery = await _wingetProvider.DiscoverAsync(
+                new ProviderContext("status", false, Environment.CurrentDirectory),
+                cancellationToken);
+            installed = discovery.Resources.Count;
+            updates = discovery.Resources.Count(resource =>
+                resource.Properties.TryGetValue("availableVersion", out var value)
+                && !string.IsNullOrWhiteSpace(value.Value));
+            diagnostics.AddRange(discovery.Diagnostics);
+        }
+
+        if (_featureProvider.IsSupported)
+        {
+            var discovery = await _featureProvider.DiscoverAsync(
+                new ProviderContext("status", false, Environment.CurrentDirectory),
+                cancellationToken);
+            enabled = discovery.Resources.Count(resource => resource.State == Domain.Configuration.DesiredState.Enabled);
+            disabled = discovery.Resources.Count(resource => resource.State == Domain.Configuration.DesiredState.Disabled);
+            diagnostics.AddRange(discovery.Diagnostics);
+        }
+
+        return new SystemProvidersStatusReport(
+            _environmentProvider.IsSupported,
+            _wingetProvider.IsSupported,
+            _featureProvider.IsSupported,
+            installed,
+            updates,
+            enabled,
+            disabled,
+            diagnostics);
+    }
+
+    private static async Task<bool> AppendPlanAsync(
+        IStateProvider provider,
+        DesiredProviderState desiredState,
+        string unsupportedMessage,
+        ProviderContext providerContext,
+        PlanningContext planningContext,
+        ICollection<PlannedAction> actions,
+        ICollection<ProviderDiagnostic> diagnostics,
+        CancellationToken cancellationToken)
+    {
+        var supported = provider switch
+        {
+            EnvironmentStateProvider environment => environment.IsSupported,
+            WingetPackageProvider winget => winget.IsSupported,
+            WindowsFeatureProvider features => features.IsSupported,
+            _ => true
+        };
+        if (!supported)
+        {
+            diagnostics.Add(new ProviderDiagnostic($"{provider.Id}.unsupported", unsupportedMessage, true));
+            return false;
+        }
+
+        var discovery = await provider.DiscoverAsync(providerContext, cancellationToken);
+        diagnostics.AddRange(discovery.Diagnostics);
+        var planned = await provider.PlanAsync(
+            desiredState,
+            new CurrentProviderState(discovery.Resources),
+            planningContext,
+            cancellationToken);
+        foreach (var action in planned)
+        {
+            actions.Add(action);
+        }
+
+        return !discovery.Diagnostics.Any(diagnostic => !diagnostic.IsWarning);
+    }
+
+    private static bool UsesEnvironment(Domain.Profiles.WinStateProfile profile)
+        => profile.Environment.User.Count > 0
+            || profile.Environment.Machine.Count > 0
+            || profile.Environment.UserPath.Count > 0
+            || profile.Environment.MachinePath.Count > 0;
 
     private Task RecordHistoryAsync(
         ApplyEngineReport report,
