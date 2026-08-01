@@ -23,6 +23,21 @@ namespace WinState.Core.Profiles
             "prepend", "append"
         };
 
+        private static readonly HashSet<string> SupportedPackageStates = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "present", "absent"
+        };
+
+        private static readonly HashSet<string> SupportedPackageScopes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "user", "machine"
+        };
+
+        private static readonly HashSet<string> SupportedFeatureStates = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "enabled", "disabled"
+        };
+
         public ProfileValidationResult Validate(WinStateProfile profile)
         {
             ArgumentNullException.ThrowIfNull(profile);
@@ -41,6 +56,8 @@ namespace WinState.Core.Profiles
             ValidateVariables(profile.Environment.Machine, "environment.machine", issues);
             ValidatePath(profile.Environment.UserPath, "environment.userPath", issues);
             ValidatePath(profile.Environment.MachinePath, "environment.machinePath", issues);
+            ValidatePackages(profile.Packages, issues);
+            ValidateFeatures(profile.Features, issues);
             return new ProfileValidationResult(issues);
         }
 
@@ -85,6 +102,65 @@ namespace WinState.Core.Profiles
                 if (!SupportedPathPositions.Contains(entry.Position))
                 {
                     issues.Add(new("environment.path.position.unsupported", "Поддерживаются позиции prepend и append.", $"{entryPath}.position"));
+                }
+
+                index++;
+            }
+        }
+
+        private static void ValidatePackages(
+            IReadOnlyCollection<WingetPackageProfile> packages,
+            ICollection<ProfileValidationIssue> issues)
+        {
+            var index = 0;
+            foreach (var package in packages)
+            {
+                var path = $"packages[{index}]";
+                if (string.IsNullOrWhiteSpace(package.Id))
+                {
+                    issues.Add(new("packages.id.required", "Укажите WinGet package id.", $"{path}.id"));
+                }
+
+                if (!SupportedPackageStates.Contains(package.State))
+                {
+                    issues.Add(new("packages.state.unsupported", "Поддерживаются состояния present и absent.", $"{path}.state"));
+                }
+
+                if (string.IsNullOrWhiteSpace(package.Version))
+                {
+                    issues.Add(new("packages.version.required", "Версия должна быть latest или конкретным значением.", $"{path}.version"));
+                }
+
+                if (string.IsNullOrWhiteSpace(package.Source))
+                {
+                    issues.Add(new("packages.source.required", "Укажите источник WinGet.", $"{path}.source"));
+                }
+
+                if (!SupportedPackageScopes.Contains(package.Scope))
+                {
+                    issues.Add(new("packages.scope.unsupported", "Поддерживаются scope user и machine.", $"{path}.scope"));
+                }
+
+                index++;
+            }
+        }
+
+        private static void ValidateFeatures(
+            IReadOnlyCollection<WindowsFeatureProfile> features,
+            ICollection<ProfileValidationIssue> issues)
+        {
+            var index = 0;
+            foreach (var feature in features)
+            {
+                var path = $"features[{index}]";
+                if (string.IsNullOrWhiteSpace(feature.Name))
+                {
+                    issues.Add(new("features.name.required", "Укажите DISM feature name.", $"{path}.name"));
+                }
+
+                if (!SupportedFeatureStates.Contains(feature.State))
+                {
+                    issues.Add(new("features.state.unsupported", "Поддерживаются состояния enabled и disabled.", $"{path}.state"));
                 }
 
                 index++;

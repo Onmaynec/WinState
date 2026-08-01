@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#020806"/>
+      <stop offset="1" stop-color="#07150f"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1440" height="900" rx="28" fill="url(#bg)"/>
+  <rect x="26" y="26" width="1388" height="848" rx="20" fill="none" stroke="#23f57a" stroke-width="2" opacity=".75"/>
+  <g font-family="Consolas, Menlo, monospace">
+    <text x="70" y="90" font-size="32" font-weight="700" fill="#51ff98" filter="url(#glow)">WINSTATE // FORGE CONTROL FABRIC</text>
+    <text x="70" y="126" font-size="17" fill="#79a98d">profile → provider graph → policy gates → checkpoint → apply → verify → rollback</text>
+    <line x1="70" y1="150" x2="1370" y2="150" stroke="#1a8d50"/>
+
+    <rect x="70" y="185" width="400" height="270" rx="14" fill="#04100a" stroke="#1cba63"/>
+    <text x="95" y="225" font-size="21" fill="#51ff98">[02] PACKAGE &amp; FEATURE FORGE</text>
+    <text x="95" y="270" font-size="17" fill="#d5ffe4">[11] REFRESH INVENTORY</text>
+    <text x="95" y="305" font-size="17" fill="#d5ffe4">[12] BUILD UNIFIED PLAN</text>
+    <text x="95" y="340" font-size="17" fill="#d5ffe4">[13] EXECUTE VERIFIED PLAN</text>
+    <text x="95" y="390" font-size="15" fill="#79a98d">all checkpoints before first mutation</text>
+    <text x="95" y="420" font-size="15" fill="#79a98d">automatic rollback armed</text>
+
+    <rect x="500" y="185" width="870" height="270" rx="14" fill="#04100a" stroke="#1cba63"/>
+    <text x="525" y="225" font-size="21" fill="#51ff98">PROVIDER TELEMETRY</text>
+    <text x="525" y="272" font-size="17" fill="#8bffb8">environment</text>
+    <text x="755" y="272" font-size="17" fill="#51ff98">ONLINE</text>
+    <text x="930" y="272" font-size="17" fill="#d5ffe4">variables + PATH</text>
+    <text x="525" y="315" font-size="17" fill="#8bffb8">packages.winget</text>
+    <text x="755" y="315" font-size="17" fill="#51ff98">ONLINE</text>
+    <text x="930" y="315" font-size="17" fill="#d5ffe4">installed=42  updates=3</text>
+    <text x="525" y="358" font-size="17" fill="#8bffb8">windows.features</text>
+    <text x="755" y="358" font-size="17" fill="#51ff98">ONLINE</text>
+    <text x="930" y="358" font-size="17" fill="#d5ffe4">enabled=18  disabled=126</text>
+    <text x="525" y="410" font-size="15" fill="#79a98d">winget.exe exact IDs // DISM /English /NoRestart</text>
+
+    <rect x="70" y="485" width="1300" height="315" rx="14" fill="#04100a" stroke="#1cba63"/>
+    <text x="95" y="525" font-size="21" fill="#51ff98">UNIFIED PACKAGE &amp; FEATURE GRAPH</text>
+    <text x="95" y="570" font-size="16" fill="#79a98d">RISK</text>
+    <text x="220" y="570" font-size="16" fill="#79a98d">PROVIDER</text>
+    <text x="510" y="570" font-size="16" fill="#79a98d">OPERATION</text>
+    <text x="730" y="570" font-size="16" fill="#79a98d">RESOURCE / SAFETY BOUNDARY</text>
+    <line x1="95" y1="586" x2="1340" y2="586" stroke="#155f39"/>
+    <text x="95" y="625" font-size="17" fill="#51ff98">LOW</text>
+    <text x="220" y="625" font-size="17" fill="#d5ffe4">packages.winget</text>
+    <text x="510" y="625" font-size="17" fill="#d5ffe4">INSTALL</text>
+    <text x="730" y="625" font-size="17" fill="#d5ffe4">Git.Git // rollback: uninstall new package</text>
+    <text x="95" y="670" font-size="17" fill="#ffd75e">MEDIUM</text>
+    <text x="220" y="670" font-size="17" fill="#d5ffe4">windows.features</text>
+    <text x="510" y="670" font-size="17" fill="#d5ffe4">ENABLE</text>
+    <text x="730" y="670" font-size="17" fill="#d5ffe4">VirtualMachinePlatform // admin + reboot pending</text>
+    <text x="95" y="715" font-size="17" fill="#ff9f43">HIGH</text>
+    <text x="220" y="715" font-size="17" fill="#d5ffe4">packages.winget</text>
+    <text x="510" y="715" font-size="17" fill="#d5ffe4">UPDATE</text>
+    <text x="730" y="715" font-size="17" fill="#ffcf9d">Microsoft.PowerShell // IRREVERSIBLE gate</text>
+    <text x="95" y="765" font-size="15" fill="#79a98d">STATUS // CHECKPOINTED  •  VERIFIED ACTIONS PERSISTED  •  AUTO REBOOT DISABLED</text>
+
+    <text x="70" y="842" font-size="15" fill="#3dcf78">WinState 0.7.0-alpha.1 // WinGet + Windows Optional Features</text>
+  </g>
+</svg>

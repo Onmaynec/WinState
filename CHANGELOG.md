@@ -2,6 +2,62 @@
 
 Все заметные изменения WinState документируются в этом файле.
 
+## [0.7.0-alpha.1] — 2026-08-01
+
+### Добавлено
+
+- новый production provider `packages.winget`;
+- discovery установленных WinGet packages и доступных updates;
+- exact-ID install, upgrade и uninstall без shell-конкатенации аргументов;
+- package verification повторным чтением WinGet inventory;
+- checkpoint и rollback новых установок через удаление package, установленного транзакцией;
+- честные irreversible boundaries для package upgrade и uninstall;
+- новый production provider `windows.features`;
+- DISM inventory Optional Features через `/Online /Get-Features /English`;
+- enable/disable через `/NoRestart`;
+- feature checkpoint, verification и rollback исходного состояния;
+- обработка DISM exit code `3010` как reboot-pending;
+- YAML-секции `packages` и `features`;
+- inheritance, variables, overlay и дедупликация новых секций;
+- JSON Schema для package и feature resources;
+- три production adapters в одном Unified Apply Engine;
+- `CyberForgeShell` и Package & Feature Forge;
+- provider telemetry, inventory counters, risk plan и execution trace;
+- unit-тесты через `IWingetClient` и `IWindowsFeatureClient`;
+- sample developer workstation;
+- Windows CI prerequisite scan для winget и DISM;
+- русское руководство `docs/PACKAGES_FEATURES.md`;
+- SVG-превью Package & Feature Forge.
+
+### Изменено
+
+- версия приложения и CLI обновлена до `0.7.0-alpha.1`;
+- запуск без аргументов открывает Forge Control Fabric;
+- Nexus Control Fabric сохранён как отдельный канал;
+- Unified Apply Workflow собирает Environment, WinGet и Optional Features actions;
+- README, архитектура, безопасность и roadmap обновлены под три production providers;
+- release package smoke test использует версию `0.7.0-alpha.1`.
+
+### Безопасность
+
+- WinGet запускается через `ProcessStartInfo.ArgumentList`;
+- package IDs передаются с `--exact` и disabled interactivity;
+- upgrade/uninstall не получают ложный rollback capability;
+- irreversible package actions требуют отдельного policy gate;
+- Optional Features всегда требуют administrator policy;
+- DISM всегда получает `/NoRestart`;
+- все обратимые checkpoints создаются до первого apply;
+- success фиксируется только после provider verification;
+- массовое удаление unmanaged packages не выполняется;
+- Windows CI не устанавливает packages и не включает features.
+
+### Ограничения
+
+- WinGet inventory parser зависит от табличного формата современного App Installer;
+- downgrade после package upgrade не гарантируется;
+- package ownership и `removeUnmanagedPackages` будут расширены позже;
+- reboot-resume после входа в Windows пока не создаёт startup task.
+
 ## [0.6.0-alpha.1] — 2026-08-01
 
 ### Добавлено

@@ -4,20 +4,22 @@
 
 # 🇷🇺 WinState
 
-Русская документация является основной документацией проекта. Полное описание текущей версии находится в [`README.md`](README.md).
+Русская документация является основной документацией проекта. Полное описание находится в [`README.md`](README.md).
 
 ## Текущая версия
 
-**`0.6.0-alpha.1` — Nexus Control Fabric, Unified Apply Engine и безопасное автообновление.**
+**`0.7.0-alpha.1` — Package & Feature Forge, WinGet Provider и Windows Optional Features.**
 
 ```text
-Provider plans → unified execution graph
-               → checkpoints → apply → verify
-               → resume / reboot pending / rollback
-
-GitHub Releases → Semantic Version
-                → ZIP + SHA-256 → safe updater
+Environment + WinGet + DISM Features
+→ unified execution graph
+→ policy gates → checkpoints → apply → verify
+→ resume / reboot pending / cross-provider rollback
 ```
+
+<p align="center">
+  <img src="assets/screenshots/package-feature-forge.svg" alt="WinState Package and Feature Forge" width="96%" />
+</p>
 
 ## Быстрый старт
 
@@ -31,25 +33,36 @@ dotnet test -c Release
 dotnet run --project src/WinState.Cli
 ```
 
+## Что добавлено
+
+- секция YAML `packages`;
+- секция YAML `features`;
+- WinGet install, upgrade, uninstall и verification;
+- DISM inventory, enable, disable и rollback;
+- честные irreversible boundaries для package upgrade/uninstall;
+- общий transaction graph для трёх production providers;
+- Package & Feature Forge с telemetry, risk plan и execution trace;
+- тесты через fake clients без изменения Windows;
+- Windows CI prerequisite scan.
+
 ## Документация
 
-- [`docs/CYBER_CONTROL_CENTER.md`](docs/CYBER_CONTROL_CENTER.md) — Nexus и cyber UI;
+- [`docs/PACKAGES_FEATURES.md`](docs/PACKAGES_FEATURES.md) — WinGet и Optional Features;
 - [`docs/APPLY_ENGINE.md`](docs/APPLY_ENGINE.md) — общий transaction engine;
 - [`docs/AUTO_UPDATE.md`](docs/AUTO_UPDATE.md) — проверка и установка обновлений;
 - [`docs/PROFILE_ENGINE.md`](docs/PROFILE_ENGINE.md) — YAML Profile Engine;
-- [`docs/ENVIRONMENT_PROVIDER.md`](docs/ENVIRONMENT_PROVIDER.md) — первый Windows provider;
-- [`docs/SECURITY.md`](docs/SECURITY.md) — safeguards и threat model;
+- [`docs/ENVIRONMENT_PROVIDER.md`](docs/ENVIRONMENT_PROVIDER.md) — Environment Provider;
+- [`docs/SECURITY.md`](docs/SECURITY.md) — safeguards и rollback boundaries;
 - [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — roadmap.
 
-## Автообновление
+## Безопасность package/feature операций
 
-Официальная release-сборка проверяет GitHub Releases, сверяет Semantic Version, скачивает ZIP и `.sha256`, проверяет SHA-256 и устанавливает обновление отдельным процессом после завершения WinState.
-
-Source checkout через `dotnet run` не перезаписывается. Для него обновление выполняется командой:
-
-```powershell
-git pull
-```
+- новая WinGet-установка может быть удалена при rollback;
+- upgrade и uninstall требуют отдельного irreversible confirmation;
+- Optional Features всегда требуют administrator policy;
+- DISM запускается с `/NoRestart`;
+- success фиксируется только после verification;
+- WinState не выполняет скрытую перезагрузку.
 
 ## Лицензия
 

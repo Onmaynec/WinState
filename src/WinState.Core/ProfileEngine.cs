@@ -136,7 +136,6 @@ public sealed class ProfileEngine
 
         variables["profileFile"] = profilePath;
         variables["profileDirectory"] = Path.GetDirectoryName(profilePath) ?? Environment.CurrentDirectory;
-
         if (options?.Environment is not null)
         {
             foreach (var pair in options.Environment)
@@ -162,7 +161,7 @@ public sealed class ProfileEngine
             var changed = false;
             foreach (var key in variables.Keys.ToArray())
             {
-                var resolved = ReplaceVariables(variables[key], variables, throwOnMissing: false);
+                var resolved = ReplaceVariables(variables[key], variables, false);
                 changed |= !string.Equals(resolved, variables[key], StringComparison.Ordinal);
                 variables[key] = resolved;
             }
@@ -182,11 +181,6 @@ public sealed class ProfileEngine
         string profilePath)
     {
         var root = Path.GetDirectoryName(profilePath) ?? Environment.CurrentDirectory;
-        var user = NormalizeVariables(document.Environment.User, variables);
-        var machine = NormalizeVariables(document.Environment.Machine, variables);
-        var userPath = NormalizePaths(document.Environment.UserPath, variables, root);
-        var machinePath = NormalizePaths(document.Environment.MachinePath, variables, root);
-
         return new WinStateProfile
         {
             SchemaVersion = document.SchemaVersion,
@@ -205,11 +199,13 @@ public sealed class ProfileEngine
             },
             Environment = new EnvironmentProfileSection
             {
-                User = user,
-                Machine = machine,
-                UserPath = userPath,
-                MachinePath = machinePath
+                User = NormalizeVariables(document.Environment.User, variables),
+                Machine = NormalizeVariables(document.Environment.Machine, variables),
+                UserPath = NormalizePaths(document.Environment.UserPath, variables, root),
+                MachinePath = NormalizePaths(document.Environment.MachinePath, variables, root)
             },
+            Packages = NormalizePackages(document.Packages, variables),
+            Features = NormalizeFeatures(document.Features, variables),
             Includes = document.Includes.ToArray(),
             Extends = document.Extends.ToArray()
         };
@@ -222,8 +218,7 @@ public sealed class ProfileEngine
         var result = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var pair in source)
         {
-            var key = pair.Key.Trim();
-            result[key] = Resolve(pair.Value, variables);
+            result[pair.Key.Trim()] = Resolve(pair.Value, variables);
         }
 
         return result;
@@ -238,8 +233,7 @@ public sealed class ProfileEngine
         var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in source)
         {
-            var resolved = Resolve(entry.Path, variables);
-            var normalized = NormalizePath(resolved, root);
+            var normalized = NormalizePath(Resolve(entry.Path, variables), root);
             if (!identities.Add(normalized))
             {
                 continue;
@@ -248,12 +242,58 @@ public sealed class ProfileEngine
             result.Add(new PathEntryProfile
             {
                 Path = normalized,
-                State = string.IsNullOrWhiteSpace(entry.State) ? "present" : entry.State.Trim().ToLowerInvariant(),
-                Position = string.IsNullOrWhiteSpace(entry.Position) ? "append" : entry.Position.Trim().ToLowerInvariant()
+                State = NormalizeToken(entry.State, "present"),
+                Position = NormalizeToken(entry.Position, "append")
             });
         }
 
         return result;
+    }
+
+    private static IReadOnlyCollection<WingetPackageProfile> NormalizePackages(
+        IReadOnlyCollection<PackageDocument> source,
+        IReadOnlyDictionary<string, string> variables)
+    {
+        var result = new Dictionary<string, WingetPackageProfile>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in source)
+        {
+            var id = Resolve(item.Id, variables);
+            var packageSource = ResolveDefault(item.Source, variables, "winget");
+            result[$"{packageSource}|{id}"] = new WingetPackageProfile
+            {
+                Id = id,
+                State = NormalizeToken(item.State, "present"),
+                Version = ResolveDefault(item.Version, variables, "latest"),
+                Source = packageSource,
+                Scope = NormalizeToken(item.Scope, "user"),
+                AllowUpgrade = item.AllowUpgrade ?? true,
+                MayRequireReboot = item.MayRequireReboot ?? false
+            };
+        }
+
+        return result.Values
+            .OrderBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(package => package.Source, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static IReadOnlyCollection<WindowsFeatureProfile> NormalizeFeatures(
+        IReadOnlyCollection<FeatureDocument> source,
+        IReadOnlyDictionary<string, string> variables)
+    {
+        var result = new Dictionary<string, WindowsFeatureProfile>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in source)
+        {
+            var name = Resolve(item.Name, variables);
+            result[name] = new WindowsFeatureProfile
+            {
+                Name = name,
+                State = NormalizeToken(item.State, "enabled"),
+                IncludeParents = item.IncludeParents ?? true
+            };
+        }
+
+        return result.Values.OrderBy(feature => feature.Name, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     private static string NormalizePath(string value, string root)
@@ -269,17 +309,25 @@ public sealed class ProfileEngine
     }
 
     private static string Resolve(string? value, IReadOnlyDictionary<string, string> variables)
-        => ReplaceVariables(value ?? string.Empty, variables, throwOnMissing: true).Trim();
+        => ReplaceVariables(value ?? string.Empty, variables, true).Trim();
+
+    private static string ResolveDefault(
+        string? value,
+        IReadOnlyDictionary<string, string> variables,
+        string fallback)
+        => string.IsNullOrWhiteSpace(value) ? fallback : Resolve(value, variables);
 
     private static string? ResolveNullable(string? value, IReadOnlyDictionary<string, string> variables)
         => value is null ? null : Resolve(value, variables);
+
+    private static string NormalizeToken(string? value, string fallback)
+        => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim().ToLowerInvariant();
 
     private static string ReplaceVariables(
         string value,
         IReadOnlyDictionary<string, string> variables,
         bool throwOnMissing)
-    {
-        return VariablePattern.Replace(value, match =>
+        => VariablePattern.Replace(value, match =>
         {
             var name = match.Groups["braced"].Success
                 ? match.Groups["braced"].Value
@@ -296,11 +344,9 @@ public sealed class ProfileEngine
 
             return match.Value;
         });
-    }
 
     private static ProfileDocument Merge(ProfileDocument baseline, ProfileDocument overlay)
-    {
-        return new ProfileDocument
+        => new()
         {
             SchemaVersion = overlay.SchemaVersion != 0 ? overlay.SchemaVersion : baseline.SchemaVersion,
             Metadata = new MetadataDocument
@@ -324,10 +370,11 @@ public sealed class ProfileEngine
                 UserPath = baseline.Environment.UserPath.Concat(overlay.Environment.UserPath).ToList(),
                 MachinePath = baseline.Environment.MachinePath.Concat(overlay.Environment.MachinePath).ToList()
             },
+            Packages = baseline.Packages.Concat(overlay.Packages).ToList(),
+            Features = baseline.Features.Concat(overlay.Features).ToList(),
             Includes = overlay.Includes.ToList(),
             Extends = overlay.Extends.ToList()
         };
-    }
 
     private static Dictionary<string, string> MergeDictionary(
         IReadOnlyDictionary<string, string> baseline,
@@ -357,6 +404,8 @@ public sealed class ProfileEngine
         public SettingsDocument Settings { get; set; } = new();
         public Dictionary<string, string> Variables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public EnvironmentDocument Environment { get; set; } = new();
+        public List<PackageDocument> Packages { get; set; } = [];
+        public List<FeatureDocument> Features { get; set; } = [];
         public List<string> Includes { get; set; } = [];
         public List<string> Extends { get; set; } = [];
     }
@@ -389,5 +438,23 @@ public sealed class ProfileEngine
         public string Path { get; set; } = string.Empty;
         public string State { get; set; } = "present";
         public string Position { get; set; } = "append";
+    }
+
+    private sealed class PackageDocument
+    {
+        public string Id { get; set; } = string.Empty;
+        public string State { get; set; } = "present";
+        public string Version { get; set; } = "latest";
+        public string Source { get; set; } = "winget";
+        public string Scope { get; set; } = "user";
+        public bool? AllowUpgrade { get; set; }
+        public bool? MayRequireReboot { get; set; }
+    }
+
+    private sealed class FeatureDocument
+    {
+        public string Name { get; set; } = string.Empty;
+        public string State { get; set; } = "enabled";
+        public bool? IncludeParents { get; set; }
     }
 }

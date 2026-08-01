@@ -44,67 +44,69 @@ Discover → Diff → Plan → Confirm → Checkpoint → Apply → Verify → R
 
 ## ✅ Этап 6 — Apply Engine и Update Uplink (`0.6.0-alpha.1`)
 
-### Unified Apply Engine
-
-- отдельный проект `WinState.Apply`;
-- единый multi-provider execution graph;
-- deterministic dependency ordering;
-- missing dependency и cycle validation;
-- centralized risk groups;
-- admin/Critical/irreversible policy gates;
-- checkpoint barrier всех providers;
-- atomic persisted transaction manifest;
-- progress persistence после каждого verified action;
-- resume после остановки процесса;
+- `WinState.Apply` и единый multi-provider graph;
+- risk/admin/Critical/irreversible policy gates;
+- checkpoint barrier, persisted progress, resume и cross-provider rollback;
 - reboot-pending state;
-- automatic/manual cross-provider rollback;
-- Environment Provider adapter;
-- Transaction Matrix в Nexus UI;
-- fake multi-provider unit tests.
+- Transaction Matrix;
+- GitHub Releases, Semantic Version, SHA-256 и safe updater;
+- self-contained `win-x64` / `win-arm64` packages.
 
-### Update Uplink
+## ✅ Этап 7 — Packages и Windows Features (`0.7.0-alpha.1`)
 
-- отдельный проект `WinState.Update`;
-- GitHub Releases API;
-- stable/prerelease channels;
-- Semantic Version comparison;
-- startup check ledger;
-- режимы `off/check/prompt/install`;
-- runtime-specific ZIP selection;
-- `.sha256` download и verification;
-- safe extraction;
-- release marker validation;
-- отдельный updater process;
-- self-contained `win-x64` и `win-arm64` packages;
-- Windows package smoke test.
+### WinGet Provider
 
-## ⏭️ Этап 7 — Packages и Windows Features (`0.7.0-alpha.1`)
-
-- WinGet provider;
+- отдельный проект `WinState.Providers.Packages`;
 - package discovery и normalized identity;
-- install/update/uninstall plan;
-- ownership policy;
-- safe remove-unmanaged mode;
-- Windows Optional Features provider;
-- WSL prerequisites;
-- reboot grouping;
-- подключение обоих providers к общему Apply Engine.
+- exact-ID install, update и uninstall;
+- exact/latest version policy;
+- user/machine scope;
+- install checkpoint и rollback;
+- irreversible boundary для upgrade/uninstall;
+- post-operation verification;
+- fake-client unit tests.
 
-## Этап 8 — Services, Registry, Git, PowerShell и Files
+### Windows Features Provider
 
-- allowlisted registry provider;
-- services/startup/tasks;
+- отдельный проект `WinState.Providers.Features`;
+- DISM inventory;
+- enable/disable через `/NoRestart`;
+- administrator и reboot boundaries;
+- checkpoint исходного состояния;
+- verification и rollback;
+- обработка exit code `3010`;
+- fake-client unit tests.
+
+### Интеграция
+
+- YAML-секции `packages` и `features`;
+- inheritance, variables, overlay и validation;
+- три production adapters в одном Unified Apply Engine;
+- Package & Feature Forge;
+- provider telemetry и risk plan;
+- sample, JSON Schema, документация и SVG-превью;
+- Windows prerequisite scan для winget и DISM.
+
+Отложено намеренно: массовый `removeUnmanagedPackages` и полноценная ownership policy. До появления надёжного ownership store WinState не удаляет неизвестные packages.
+
+## ⏭️ Этап 8 — Registry, Services, Startup и Tasks (`0.8.0-alpha.1`)
+
+- allowlisted Registry provider;
+- Windows Services state/start mode;
+- Startup entries;
+- Scheduled Tasks definitions;
+- ownership markers;
+- per-resource backup payloads;
+- dependency links между services/features/packages;
+- verification и rollback через общий Apply Engine.
+
+## Этап 9 — Git, PowerShell, Files и Capture
+
 - Git configuration;
 - PowerShell modules;
-- managed files and directories.
-
-## Этап 9 — Capture, drift и отчёты
-
+- managed files and directories;
 - capture/export;
-- profile snapshots;
-- drift scan;
-- transaction history UI;
-- Markdown/JSON reports.
+- profile snapshots и drift scan.
 
 ## Этап 10 — stable release pipeline
 
@@ -112,5 +114,5 @@ Discover → Diff → Plan → Confirm → Checkpoint → Apply → Verify → R
 - Authenticode signing;
 - updater backup restore command;
 - migration compatibility;
-- release notes;
+- Markdown/JSON reports;
 - stable `1.0` pipeline.

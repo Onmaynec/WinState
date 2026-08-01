@@ -8,6 +8,8 @@
     <ProjectReference Include="..\WinState.Domain\WinState.Domain.csproj" />
     <ProjectReference Include="..\WinState.Infrastructure\WinState.Infrastructure.csproj" />
     <ProjectReference Include="..\WinState.Providers.Environment\WinState.Providers.Environment.csproj" />
+    <ProjectReference Include="..\WinState.Providers.Features\WinState.Providers.Features.csproj" />
+    <ProjectReference Include="..\WinState.Providers.Packages\WinState.Providers.Packages.csproj" />
     <ProjectReference Include="..\WinState.Storage\WinState.Storage.csproj" />
   </ItemGroup>
   <ItemGroup>

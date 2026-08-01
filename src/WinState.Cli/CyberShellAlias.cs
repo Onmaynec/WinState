@@ -1,1 +1,1 @@
-global using WinStateTerminalShell = WinState.Terminal.CyberNexusShell;
+global using WinStateTerminalShell = WinState.Terminal.CyberForgeShell;

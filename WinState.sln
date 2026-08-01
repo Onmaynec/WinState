@@ -16,6 +16,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Storage", "src\Win
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Providers.Environment", "src\WinState.Providers.Environment\WinState.Providers.Environment.csproj", "{A4E41378-1CFD-4475-A969-8B660E395FA1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Providers.Packages", "src\WinState.Providers.Packages\WinState.Providers.Packages.csproj", "{B2C6E4D7-0F91-4B71-A131-AD6D2E6F7701}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Providers.Features", "src\WinState.Providers.Features\WinState.Providers.Features.csproj", "{C8A8F150-96EA-4A17-8F70-245AEFB27561}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.App", "src\WinState.App\WinState.App.csproj", "{D4AA2700-9404-4B1A-A0DF-DAA28B5604E4}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Terminal", "src\WinState.Terminal\WinState.Terminal.csproj", "{A31E2680-2750-4E2D-A89A-99044D096B77}"
@@ -68,6 +72,14 @@ Global
 		{A4E41378-1CFD-4475-A969-8B660E395FA1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A4E41378-1CFD-4475-A969-8B660E395FA1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A4E41378-1CFD-4475-A969-8B660E395FA1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B2C6E4D7-0F91-4B71-A131-AD6D2E6F7701}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B2C6E4D7-0F91-4B71-A131-AD6D2E6F7701}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B2C6E4D7-0F91-4B71-A131-AD6D2E6F7701}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B2C6E4D7-0F91-4B71-A131-AD6D2E6F7701}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C8A8F150-96EA-4A17-8F70-245AEFB27561}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8A8F150-96EA-4A17-8F70-245AEFB27561}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8A8F150-96EA-4A17-8F70-245AEFB27561}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C8A8F150-96EA-4A17-8F70-245AEFB27561}.Release|Any CPU.Build.0 = Release|Any CPU
 		{D4AA2700-9404-4B1A-A0DF-DAA28B5604E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D4AA2700-9404-4B1A-A0DF-DAA28B5604E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D4AA2700-9404-4B1A-A0DF-DAA28B5604E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
