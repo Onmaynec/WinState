@@ -1,0 +1,29 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore
+        run: dotnet restore WinState.sln
+      - name: Build
+        run: dotnet build WinState.sln --configuration Release --no-restore
+      - name: Test
+        run: dotnet test WinState.sln --configuration Release --no-build
+      - name: CLI smoke test
+        run: dotnet run --project src/WinState.Cli --configuration Release --no-build -- --help
