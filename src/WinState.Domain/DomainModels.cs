@@ -4,22 +4,20 @@ using WinState.Domain.Resources;
 
 namespace WinState.Domain.Configuration
 {
-    /// <summary>Декларативное желаемое состояние ресурса.</summary>
     public enum DesiredState { Present, Absent, Enabled, Disabled, Running, Stopped, Configured, Unmanaged }
-
-    /// <summary>Оценка риска планируемого изменения.</summary>
     public enum RiskLevel { None, Low, Medium, High, Critical }
 }
 
 namespace WinState.Domain.Errors
 {
-    /// <summary>Ошибка нарушения доменных правил WinState.</summary>
-    public sealed class WinStateDomainException(string message) : Exception(message);
+    public sealed class WinStateDomainException : Exception
+    {
+        public WinStateDomainException(string message) : base(message) { }
+    }
 }
 
 namespace WinState.Domain.Resources
 {
-    /// <summary>Нормализованное значение свойства ресурса.</summary>
     public sealed record StateValue(string? Value, bool IsSecret = false)
     {
         public static StateValue From(string? value) => new(value);
@@ -27,35 +25,27 @@ namespace WinState.Domain.Resources
         public override string ToString() => IsSecret ? "<secret>" : Value ?? "<null>";
     }
 
-    /// <summary>Правила проверки стабильных идентификаторов ресурсов.</summary>
     public static class ResourceIdentity
     {
         public static string Normalize(string identity)
         {
             if (string.IsNullOrWhiteSpace(identity))
-            {
                 throw new Errors.WinStateDomainException("Идентификатор ресурса не может быть пустым.");
-            }
 
             var normalized = identity.Trim().Replace('\\', '/');
             while (normalized.Contains("//", StringComparison.Ordinal))
-            {
                 normalized = normalized.Replace("//", "/", StringComparison.Ordinal);
-            }
-
             return normalized;
         }
     }
 
-    /// <summary>Универсальное представление управляемого ресурса.</summary>
     public sealed record StateResource
     {
         public required string ProviderId { get; init; }
         public required string ResourceType { get; init; }
         public required string Identity { get; init; }
         public required DesiredState State { get; init; }
-        public IReadOnlyDictionary<string, StateValue> Properties { get; init; }
-            = new Dictionary<string, StateValue>(StringComparer.OrdinalIgnoreCase);
+        public IReadOnlyDictionary<string, StateValue> Properties { get; init; } = new Dictionary<string, StateValue>(StringComparer.OrdinalIgnoreCase);
         public IReadOnlyCollection<string> Tags { get; init; } = Array.Empty<string>();
         public string NormalizedIdentity => ResourceIdentity.Normalize(Identity);
     }
@@ -66,7 +56,6 @@ namespace WinState.Domain.Planning
     public enum ActionType { Create, Install, Update, Modify, Enable, Disable, Start, Stop, Remove, Uninstall, Reorder, Copy, Restore, NoOp, Manual, Unsupported }
     public enum ActionStatus { Pending, Running, Succeeded, Failed, Skipped, Cancelled, RolledBack, RollbackFailed, VerificationFailed, ManualActionRequired }
 
-    /// <summary>Полностью объяснимое действие execution plan.</summary>
     public sealed record PlannedAction
     {
         public required string Id { get; init; }
@@ -74,10 +63,8 @@ namespace WinState.Domain.Planning
         public required StateResource Resource { get; init; }
         public required ActionType Operation { get; init; }
         public required RiskLevel Risk { get; init; }
-        public IReadOnlyDictionary<string, StateValue> CurrentProperties { get; init; }
-            = new Dictionary<string, StateValue>(StringComparer.OrdinalIgnoreCase);
-        public IReadOnlyDictionary<string, StateValue> DesiredProperties { get; init; }
-            = new Dictionary<string, StateValue>(StringComparer.OrdinalIgnoreCase);
+        public IReadOnlyDictionary<string, StateValue> CurrentProperties { get; init; } = new Dictionary<string, StateValue>(StringComparer.OrdinalIgnoreCase);
+        public IReadOnlyDictionary<string, StateValue> DesiredProperties { get; init; } = new Dictionary<string, StateValue>(StringComparer.OrdinalIgnoreCase);
         public bool RequiresAdministrator { get; init; }
         public bool MayRequireReboot { get; init; }
         public bool SupportsRollback { get; init; }
@@ -92,8 +79,14 @@ namespace WinState.Domain.Providers
     [Flags]
     public enum ProviderCapabilities
     {
-        None = 0, Capture = 1 << 0, Apply = 1 << 1, Rollback = 1 << 2, Remove = 1 << 3,
-        Offline = 1 << 4, MayRequireAdministrator = 1 << 5, MayRequireReboot = 1 << 6
+        None = 0,
+        Capture = 1 << 0,
+        Apply = 1 << 1,
+        Rollback = 1 << 2,
+        Remove = 1 << 3,
+        Offline = 1 << 4,
+        MayRequireAdministrator = 1 << 5,
+        MayRequireReboot = 1 << 6
     }
 
     public interface IStateProvider
