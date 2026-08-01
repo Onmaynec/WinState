@@ -6,9 +6,19 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Domain", "src\WinS
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Core", "src\WinState.Core\WinState.Core.csproj", "{3411C6D2-9D18-4F0D-B219-8894DBE4942F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Infrastructure", "src\WinState.Infrastructure\WinState.Infrastructure.csproj", "{B1267460-8DBA-4F48-A865-3E9FD795B2E2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Storage", "src\WinState.Storage\WinState.Storage.csproj", "{C8214243-D229-43F7-9C1C-3BA1E6481854}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.App", "src\WinState.App\WinState.App.csproj", "{D4AA2700-9404-4B1A-A0DF-DAA28B5604E4}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Cli", "src\WinState.Cli\WinState.Cli.csproj", "{8739059A-58E7-4F3C-961B-2AE900D58A03}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Core.Tests", "tests\WinState.Core.Tests\WinState.Core.Tests.csproj", "{75E66A3C-809C-457C-BABB-3015DCDE1EC8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Infrastructure.Tests", "tests\WinState.Infrastructure.Tests\WinState.Infrastructure.Tests.csproj", "{E5E7459C-4F91-4D13-9E8E-0D1C84A4E3B7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Storage.Tests", "tests\WinState.Storage.Tests\WinState.Storage.Tests.csproj", "{F62E3228-B474-4375-B842-C671D2788DB6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -24,6 +34,18 @@ Global
 		{3411C6D2-9D18-4F0D-B219-8894DBE4942F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3411C6D2-9D18-4F0D-B219-8894DBE4942F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3411C6D2-9D18-4F0D-B219-8894DBE4942F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B1267460-8DBA-4F48-A865-3E9FD795B2E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B1267460-8DBA-4F48-A865-3E9FD795B2E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B1267460-8DBA-4F48-A865-3E9FD795B2E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B1267460-8DBA-4F48-A865-3E9FD795B2E2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C8214243-D229-43F7-9C1C-3BA1E6481854}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8214243-D229-43F7-9C1C-3BA1E6481854}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8214243-D229-43F7-9C1C-3BA1E6481854}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C8214243-D229-43F7-9C1C-3BA1E6481854}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D4AA2700-9404-4B1A-A0DF-DAA28B5604E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D4AA2700-9404-4B1A-A0DF-DAA28B5604E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D4AA2700-9404-4B1A-A0DF-DAA28B5604E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D4AA2700-9404-4B1A-A0DF-DAA28B5604E4}.Release|Any CPU.Build.0 = Release|Any CPU
 		{8739059A-58E7-4F3C-961B-2AE900D58A03}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{8739059A-58E7-4F3C-961B-2AE900D58A03}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8739059A-58E7-4F3C-961B-2AE900D58A03}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -32,5 +54,13 @@ Global
 		{75E66A3C-809C-457C-BABB-3015DCDE1EC8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{75E66A3C-809C-457C-BABB-3015DCDE1EC8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{75E66A3C-809C-457C-BABB-3015DCDE1EC8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E5E7459C-4F91-4D13-9E8E-0D1C84A4E3B7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E5E7459C-4F91-4D13-9E8E-0D1C84A4E3B7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E5E7459C-4F91-4D13-9E8E-0D1C84A4E3B7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E5E7459C-4F91-4D13-9E8E-0D1C84A4E3B7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F62E3228-B474-4375-B842-C671D2788DB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F62E3228-B474-4375-B842-C671D2788DB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F62E3228-B474-4375-B842-C671D2788DB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F62E3228-B474-4375-B842-C671D2788DB6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -25,5 +25,11 @@ jobs:
         run: dotnet build WinState.sln --configuration Release --no-restore
       - name: Test
         run: dotnet test WinState.sln --configuration Release --no-build
-      - name: CLI smoke test
+      - name: CLI help smoke test
         run: dotnet run --project src/WinState.Cli --configuration Release --no-build -- --help
+      - name: Doctor and storage smoke tests
+        shell: pwsh
+        run: |
+          $home = Join-Path $PWD ".ci-winstate"
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- doctor --home $home
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- storage status --home $home

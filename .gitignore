@@ -6,9 +6,14 @@
 *.suo
 *.cache
 *.log
+*.db
+*.db-shm
+*.db-wal
 TestResults/
 artifacts/
 release/
+.ci-winstate/
+.winstate/
 *.wsstate
 .env
 secrets.*
