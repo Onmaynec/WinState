@@ -11,6 +11,7 @@ permissions:
 jobs:
   build-and-test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -30,6 +31,6 @@ jobs:
       - name: Doctor and storage smoke tests
         shell: pwsh
         run: |
-          $home = Join-Path $PWD ".ci-winstate"
-          dotnet run --project src/WinState.Cli --configuration Release --no-build -- doctor --home $home
-          dotnet run --project src/WinState.Cli --configuration Release --no-build -- storage status --home $home
+          $stateHome = Join-Path $PWD ".ci-winstate"
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- doctor --home $stateHome
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- storage status --home $stateHome
