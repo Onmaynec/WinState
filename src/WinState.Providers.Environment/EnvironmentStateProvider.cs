@@ -104,7 +104,9 @@ public sealed class WindowsEnvironmentStore : IEnvironmentStore
         CancellationToken cancellationToken)
     {
         var value = await ReadVariableAsync(scope, "Path", cancellationToken);
-        return SplitPath(value);
+        return string.IsNullOrWhiteSpace(value)
+            ? Array.Empty<string>()
+            : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
     public async Task WritePathAsync(
@@ -133,16 +135,11 @@ public sealed class WindowsEnvironmentStore : IEnvironmentStore
 
     private static void ValidateName(string name)
     {
-        if (string.IsNullOrWhiteSpace(name) || name.Contains('=', StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(name) || name.Contains('='))
         {
             throw new ArgumentException("Некорректное имя переменной окружения.", nameof(name));
         }
     }
-
-    private static IReadOnlyList<string> SplitPath(string? value)
-        => string.IsNullOrWhiteSpace(value)
-            ? Array.Empty<string>()
-            : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static void BroadcastEnvironmentChanged()
     {
@@ -172,7 +169,7 @@ public sealed class WindowsEnvironmentStore : IEnvironmentStore
         out UIntPtr result);
 }
 
-/// <summary>Детерминированное in-memory хранилище для unit-тестов и безопасных сценариев.</summary>
+/// <summary>Детерминированное in-memory хранилище для unit-тестов.</summary>
 public sealed class InMemoryEnvironmentStore : IEnvironmentStore
 {
     private readonly Dictionary<EnvironmentScope, Dictionary<string, string?>> _variables;
@@ -203,8 +200,10 @@ public sealed class InMemoryEnvironmentStore : IEnvironmentStore
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var copy = new Dictionary<string, string?>(_variables[scope], StringComparer.OrdinalIgnoreCase);
-        copy["Path"] = string.Join(';', _paths[scope]);
+        var copy = new Dictionary<string, string?>(_variables[scope], StringComparer.OrdinalIgnoreCase)
+        {
+            ["Path"] = string.Join(';', _paths[scope])
+        };
         return Task.FromResult<IReadOnlyDictionary<string, string?>>(copy);
     }
 
@@ -335,7 +334,7 @@ public static class EnvironmentProfileMapper
                 $"Ресурс '{resource.Identity}' не содержит обязательное свойство '{property}'.");
         }
 
-        return value.Value;
+        return value.Value!;
     }
 
     public static string ScopeName(EnvironmentScope scope)
@@ -369,15 +368,14 @@ public static class EnvironmentProfileMapper
     {
         foreach (var item in paths)
         {
-            var state = item.State.Equals("absent", StringComparison.OrdinalIgnoreCase)
-                ? DesiredState.Absent
-                : DesiredState.Present;
             resources.Add(new StateResource
             {
                 ProviderId = ProviderId,
                 ResourceType = PathResourceType,
                 Identity = PathIdentity(scope, item.Path),
-                State = state,
+                State = item.State.Equals("absent", StringComparison.OrdinalIgnoreCase)
+                    ? DesiredState.Absent
+                    : DesiredState.Present,
                 Properties = Properties(
                     ("scope", ScopeName(scope)),
                     ("path", item.Path),
@@ -405,14 +403,10 @@ public static class EnvironmentProfileMapper
     }
 }
 
-/// <summary>Первый полный системный провайдер WinState: discovery, plan, apply, verify и rollback.</summary>
+/// <summary>Первый полный системный провайдер WinState.</summary>
 public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true
-    };
-
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private readonly IEnvironmentStore _store;
 
     public EnvironmentStateProvider(IEnvironmentStore store)
@@ -421,8 +415,8 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
     }
 
     public string Id => EnvironmentProfileMapper.ProviderId;
-
     public string DisplayName => "Windows Environment";
+    public bool IsSupported => _store.IsSupported;
 
     public ProviderCapabilities Capabilities =>
         ProviderCapabilities.Capture
@@ -430,8 +424,6 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
         | ProviderCapabilities.Rollback
         | ProviderCapabilities.Remove
         | ProviderCapabilities.MayRequireAdministrator;
-
-    public bool IsSupported => _store.IsSupported;
 
     public async Task<ProviderDiscoveryResult> DiscoverAsync(
         ProviderContext context,
@@ -516,16 +508,16 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
         _ = context;
         cancellationToken.ThrowIfCancellationRequested();
 
-        var current = currentState.Resources.ToDictionary(
-            item => item.NormalizedIdentity,
-            StringComparer.OrdinalIgnoreCase);
+        var current = currentState.Resources
+            .GroupBy(item => item.NormalizedIdentity, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
         var actions = new List<PlannedAction>();
         foreach (var desired in desiredState.Resources
             .Where(item => item.ProviderId.Equals(Id, StringComparison.OrdinalIgnoreCase)))
         {
             cancellationToken.ThrowIfCancellationRequested();
             _ = current.TryGetValue(desired.NormalizedIdentity, out var existing);
-            PlannedAction? action = desired.ResourceType switch
+            var action = desired.ResourceType switch
             {
                 EnvironmentProfileMapper.VariableResourceType => PlanVariable(desired, existing),
                 EnvironmentProfileMapper.PathResourceType => PlanPath(desired, existing),
@@ -554,9 +546,11 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
             var scope = EnvironmentProfileMapper.ParseScope(action.Resource);
             if (action.Resource.ResourceType == EnvironmentProfileMapper.VariableResourceType)
             {
-                var name = EnvironmentProfileMapper.Required(action.Resource, "name");
-                var value = EnvironmentProfileMapper.Required(action.Resource, "value");
-                await _store.WriteVariableAsync(scope, name, value, cancellationToken);
+                await _store.WriteVariableAsync(
+                    scope,
+                    EnvironmentProfileMapper.Required(action.Resource, "name"),
+                    EnvironmentProfileMapper.Required(action.Resource, "value"),
+                    cancellationToken);
             }
             else if (action.Resource.ResourceType == EnvironmentProfileMapper.PathResourceType)
             {
@@ -565,7 +559,7 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
             else
             {
                 return new ActionExecutionResult(
-                    ActionStatus.Unsupported,
+                    ActionStatus.ManualActionRequired,
                     $"Тип ресурса '{action.Resource.ResourceType}' не поддерживается Environment Provider.",
                     Array.Empty<ProviderDiagnostic>());
             }
@@ -602,9 +596,10 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
             var name = EnvironmentProfileMapper.Required(action.Resource, "name");
             var desired = EnvironmentProfileMapper.Required(action.Resource, "value");
             var actual = await _store.ReadVariableAsync(scope, name, cancellationToken);
+            var matches = string.Equals(actual, desired, StringComparison.Ordinal);
             return new VerificationResult(
-                string.Equals(actual, desired, StringComparison.Ordinal),
-                string.Equals(actual, desired, StringComparison.Ordinal)
+                matches,
+                matches
                     ? $"Переменная {name} подтверждена."
                     : $"Переменная {name} отличается после применения.");
         }
@@ -612,20 +607,20 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
         if (action.Resource.ResourceType == EnvironmentProfileMapper.PathResourceType)
         {
             var desiredPath = EnvironmentProfileMapper.Required(action.Resource, "path");
-            var desiredIdentity = EnvironmentProfileMapper.NormalizePathIdentity(desiredPath);
+            var identity = EnvironmentProfileMapper.NormalizePathIdentity(desiredPath);
             var entries = await _store.ReadPathAsync(scope, cancellationToken);
             var index = entries
                 .Select((value, position) => new { value, position })
                 .FirstOrDefault(item => EnvironmentProfileMapper.NormalizePathIdentity(item.value)
-                    .Equals(desiredIdentity, StringComparison.OrdinalIgnoreCase))?.position ?? -1;
-            var shouldExist = action.Resource.State != DesiredState.Absent;
-            var position = action.Resource.Properties.TryGetValue("position", out var positionValue)
-                ? positionValue.Value
+                    .Equals(identity, StringComparison.OrdinalIgnoreCase))?.position ?? -1;
+            var position = action.Resource.Properties.TryGetValue("position", out var value)
+                ? value.Value
                 : "append";
             var positionMatches = index < 0
-                || position is not ("prepend" or "append")
+                || (position != "prepend" && position != "append")
                 || (position == "prepend" && index == 0)
                 || (position == "append" && index == entries.Count - 1);
+            var shouldExist = action.Resource.State != DesiredState.Absent;
             var matches = shouldExist ? index >= 0 && positionMatches : index < 0;
             return new VerificationResult(
                 matches,
@@ -754,10 +749,9 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
 
         var scope = EnvironmentProfileMapper.ParseScope(desired);
         var name = EnvironmentProfileMapper.Required(desired, "name");
-        var operation = current is null ? ActionType.Create : ActionType.Modify;
         return CreateAction(
             desired,
-            operation,
+            current is null ? ActionType.Create : ActionType.Modify,
             scope,
             current?.Properties ?? EmptyProperties(),
             desired.Properties,
@@ -794,8 +788,8 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
                 $"Добавить PATH entry '{path}' в {EnvironmentProfileMapper.ScopeName(scope)} scope.");
         }
 
-        var position = desired.Properties.TryGetValue("position", out var positionValue)
-            ? positionValue.Value
+        var position = desired.Properties.TryGetValue("position", out var value)
+            ? value.Value
             : "append";
         var index = ParseInteger(current, "index");
         var count = ParseInteger(current, "count");
@@ -820,14 +814,13 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
         IReadOnlyDictionary<string, StateValue> target,
         string explanation)
     {
-        var risk = scope == EnvironmentScope.Machine ? RiskLevel.Medium : RiskLevel.Low;
         return new PlannedAction
         {
             Id = ActionId(operation, desired.NormalizedIdentity),
             ProviderId = EnvironmentProfileMapper.ProviderId,
             Resource = desired,
             Operation = operation,
-            Risk = risk,
+            Risk = scope == EnvironmentScope.Machine ? RiskLevel.Medium : RiskLevel.Low,
             CurrentProperties = current,
             DesiredProperties = target,
             RequiresAdministrator = scope == EnvironmentScope.Machine,
@@ -845,8 +838,8 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
             {
                 var action = actions[index];
                 if (action.Resource.ResourceType != EnvironmentProfileMapper.PathResourceType
-                    || !action.Resource.Properties.TryGetValue("scope", out var scopeValue)
-                    || !string.Equals(scopeValue.Value, scope, StringComparison.OrdinalIgnoreCase))
+                    || !action.Resource.Properties.TryGetValue("scope", out var value)
+                    || !string.Equals(value.Value, scope, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -866,10 +859,10 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
         CancellationToken cancellationToken)
     {
         var desiredPath = EnvironmentProfileMapper.Required(resource, "path");
-        var desiredIdentity = EnvironmentProfileMapper.NormalizePathIdentity(desiredPath);
+        var identity = EnvironmentProfileMapper.NormalizePathIdentity(desiredPath);
         var entries = (await _store.ReadPathAsync(scope, cancellationToken)).ToList();
         entries.RemoveAll(item => EnvironmentProfileMapper.NormalizePathIdentity(item)
-            .Equals(desiredIdentity, StringComparison.OrdinalIgnoreCase));
+            .Equals(identity, StringComparison.OrdinalIgnoreCase));
         if (resource.State != DesiredState.Absent)
         {
             var position = resource.Properties.TryGetValue("position", out var value)
@@ -899,23 +892,19 @@ public sealed class EnvironmentStateProvider : IStateProvider, IRollbackProvider
 
     private static int ParseInteger(StateResource resource, string property)
     {
-        if (resource.Properties.TryGetValue(property, out var value)
+        return resource.Properties.TryGetValue(property, out var value)
             && int.TryParse(
                 value.Value,
                 System.Globalization.NumberStyles.Integer,
                 System.Globalization.CultureInfo.InvariantCulture,
-                out var result))
-        {
-            return result;
-        }
-
-        return -1;
+                out var result)
+            ? result
+            : -1;
     }
 
     private static string ActionId(ActionType operation, string identity)
     {
-        var value = $"{operation}:{identity}";
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{operation}:{identity}"));
         return $"env-{operation.ToString().ToLowerInvariant()}-{Convert.ToHexString(hash.AsSpan(0, 6)).ToLowerInvariant()}";
     }
 
