@@ -35,6 +35,38 @@ jobs:
         run: |
           $stateHome = Join-Path $PWD ".ci-winstate"
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- ui --demo --home $stateHome
+      - name: Environment Provider status
+        shell: pwsh
+        run: |
+          $stateHome = Join-Path $PWD ".ci-winstate"
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- environment status --home $stateHome
+      - name: Environment Provider Windows vertical slice
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stateHome = Join-Path $PWD ".ci-winstate"
+          $profile = Join-Path $PWD "samples/environment-provider/user-sandbox.yaml"
+
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- environment plan $profile --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Environment plan failed." }
+
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- environment apply $profile --yes --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Environment apply failed." }
+
+          $manifest = Get-ChildItem -LiteralPath (Join-Path $stateHome "backups/environment") -Filter manifest.json -File -Recurse |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+          if (-not $manifest) { throw "Environment checkpoint manifest was not created." }
+
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- environment rollback $manifest.FullName --yes --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Environment rollback failed." }
+
+          $variable = [Environment]::GetEnvironmentVariable("WINSTATE_ENV_PROVIDER_SAMPLE", "User")
+          if ($null -ne $variable) { throw "Rollback did not remove the sample user variable." }
+
+          $expectedPath = [IO.Path]::GetFullPath((Join-Path $PWD "samples/environment-provider/tools"))
+          $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+          if (($userPath -split ';') -contains $expectedPath) { throw "Rollback did not restore the user PATH." }
       - name: Doctor and storage smoke tests
         shell: pwsh
         run: |
