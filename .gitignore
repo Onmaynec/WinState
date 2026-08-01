@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.cache
+*.log
+TestResults/
+artifacts/
+release/
+*.wsstate
+.env
+secrets.*
+!secrets.example.yaml
