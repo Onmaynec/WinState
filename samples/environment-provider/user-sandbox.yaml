@@ -1,0 +1,20 @@
+schemaVersion: 1
+
+metadata:
+  name: Environment Provider Sandbox
+  description: Безопасный User-scope пример для plan/apply/rollback.
+  author: Onmaynec
+  profileVersion: 1
+
+settings:
+  strictMode: false
+  allowReboot: false
+
+environment:
+  user:
+    WINSTATE_ENV_PROVIDER_SAMPLE: "enabled"
+
+  userPath:
+    - path: "{{profileDirectory}}/tools"
+      state: present
+      position: append
