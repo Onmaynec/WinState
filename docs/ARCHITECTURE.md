@@ -1,6 +1,6 @@
 # 🏗️ Архитектура WinState
 
-> Текущий статус: **`0.4.0-alpha.1` — первый полный Windows provider vertical slice**.
+> Текущий статус: **`0.5.0-alpha.1` — Cyber Control Center поверх безопасного Windows provider vertical slice**.
 
 WinState строится вокруг безопасного конвейера:
 
@@ -19,6 +19,8 @@ Profile → Validation → Discovery → Diff → Plan → Confirmation
                                              Rollback
 ```
 
+Cyber Control Center визуализирует этот pipeline, но не реализует его заново.
+
 ## Границы модулей
 
 | Модуль | Ответственность | Запрещённые зависимости |
@@ -29,7 +31,7 @@ Profile → Validation → Discovery → Diff → Plan → Confirmation
 | `WinState.Storage` | SQLite migrations, transaction/action/backup history | CLI и Spectre.Console |
 | `WinState.Providers.Environment` | Windows environment discovery/apply/verify/rollback | UI и общий workflow |
 | `WinState.App` | composition root и безопасные application workflows | terminal rendering |
-| `WinState.Terminal` | панели, меню, подтверждения и анимации | прямой Windows API и SQLite SQL |
+| `WinState.Terminal` | Cyber UI, меню, telemetry, traces, confirmations и анимации | прямой Windows API и SQLite SQL |
 | `WinState.Cli` | команды, flags, exit codes и automation output | системная реализация provider |
 
 ## Направление зависимостей
@@ -37,18 +39,59 @@ Profile → Validation → Discovery → Diff → Plan → Confirmation
 ```text
 WinState.Cli ───────┐
                     ▼
-WinState.Terminal → WinState.App
-                        │
-            ┌───────────┼────────────┐
-            ▼           ▼            ▼
-       WinState.Core  Storage   Providers.Environment
-            │           │            │
-            └───────────┴────────────┘
-                        ▼
-                 WinState.Domain
+CyberTerminalShell → WinState.App
+                         │
+             ┌───────────┼────────────┐
+             ▼           ▼            ▼
+        WinState.Core  Storage   Providers.Environment
+             │           │            │
+             └───────────┴────────────┘
+                         ▼
+                  WinState.Domain
 ```
 
-`Domain` не знает о верхних слоях. `Terminal` и `CLI` вызывают один application workflow и не могут обойти safeguards.
+`Domain` не знает о верхних слоях. `CyberTerminalShell` и automation CLI вызывают один application workflow и не могут обойти safeguards.
+
+## Cyber frontend boundary
+
+`CyberTerminalShell` отвечает только за presentation:
+
+```text
+boot trace
+operation channel menu
+telemetry tables
+animated progress pipeline
+action-by-action result stream
+confirmation prompts
+demo rendering
+```
+
+Он получает данные только через публичные методы `WinStateApplication`:
+
+```text
+GetEnvironmentStatusAsync
+PlanEnvironmentAsync
+ApplyEnvironmentAsync
+ListEnvironmentCheckpointsAsync
+RollbackEnvironmentAsync
+ValidateProfileAsync
+RunDoctorAsync
+GetStorageStatusAsync
+```
+
+Frontend не создаёт `PlannedAction`, backup payload или SQL-запросы самостоятельно.
+
+## Animation truthfulness
+
+Анимированный pipeline выглядит так:
+
+```text
+handshake → operation → seal result
+```
+
+Средняя фаза оборачивает настоящий async-вызов application layer. Она не переводится в completed до возврата результата. После транзакции action stream строится по `EnvironmentExecutionReport.Actions`.
+
+Это исключает ложный UI-success: зелёный verified result появляется только после provider verification.
 
 ## Environment Provider vertical slice
 
@@ -90,7 +133,7 @@ PlanAsync
 → RollbackAsync on failure/request
 ```
 
-Checkpoint создаётся для всего плана до первого изменения. Это предотвращает ситуацию, когда раннее действие применено, а резервные данные для последующих действий ещё не подготовлены.
+Checkpoint создаётся для всего плана до первого изменения.
 
 ### Хранилище
 
@@ -111,12 +154,7 @@ environment://user/variable/<sha-token>
 environment://machine/path/<sha-token>
 ```
 
-Identity строится из нормализованных scope/name/path и не содержит само значение переменной. Это даёт:
-
-- детерминированный diff;
-- безопасный action ID;
-- отсутствие значений в URI;
-- стабильность при повторном plan.
+Identity строится из нормализованных scope/name/path и не содержит само значение переменной.
 
 ## Главные правила
 
@@ -130,10 +168,11 @@ Identity строится из нормализованных scope/name/path и
 8. **Нет секретов в логах/history.** Обычная environment-секция не предназначена для секретов.
 9. **Один workflow для UI и CLI.** Safeguards нельзя обойти другим frontend.
 10. **Platform boundary.** Реальный apply Environment Provider выполняется только на Windows.
+11. **UI не является источником истины.** Статус берётся из application/provider result.
 
 ## Следующий архитектурный этап
 
-Версия `0.5.0-alpha.1` должна вынести логику одного provider workflow в общий Apply Engine:
+Версия `0.6.0-alpha.1` должна вынести логику одного provider workflow в общий Apply Engine:
 
 - несколько providers в одной транзакции;
 - risk/confirmation groups;
@@ -142,4 +181,4 @@ Identity строится из нормализованных scope/name/path и
 - resume после перезапуска;
 - reboot-pending state;
 - cross-provider rollback;
-- transaction dashboard.
+- live execution graph в Cyber Control Center.

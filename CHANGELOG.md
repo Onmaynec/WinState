@@ -2,6 +2,40 @@
 
 Все заметные изменения WinState документируются в этом файле.
 
+## [0.5.0-alpha.1] — 2026-08-01
+
+### Добавлено
+
+- новый `CyberTerminalShell` как основной интерактивный frontend;
+- визуальный язык, вдохновлённый NexRoute: плотный control-node layout, зелёная cyber-палитра и номерные каналы;
+- boot trace с загрузкой Kernel, Profile Engine, Data Core, Provider и Safeguards;
+- shutdown trace при завершении сессии;
+- animated progress pipeline `handshake → operation → seal result`;
+- live event feed на главном экране;
+- live transaction action stream после apply и rollback;
+- Control Node telemetry: host, OS, PID, architecture, uptime, provider counters, checkpoint и SQLite;
+- разделы Profile Vault, Environment Ops, Checkpoint Vault, Deep Scan, Data Core, Node Config и System Map;
+- автоматическая индексация YAML-профилей из пользовательского vault и repository `samples`;
+- отдельное SVG-превью Cyber Control Center;
+- русская документация нового terminal frontend;
+- неинтерактивный cyber demo mode для CI.
+
+### Изменено
+
+- запуск без аргументов и команда `ui` теперь открывают Cyber Control Center;
+- версия приложения и CLI обновлена до `0.5.0-alpha.1`;
+- интерфейс Environment workflow показывает risk plan и реальные action results в едином визуальном стиле;
+- roadmap сдвинут: общий multi-provider Apply Engine запланирован на `0.6.0-alpha.1`.
+
+### Безопасность
+
+- UI по-прежнему не содержит системной бизнес-логики;
+- все apply/rollback операции проходят через `WinStateApplication` и `EnvironmentWorkflow`;
+- новый frontend не изменяет confirmation policy;
+- Machine scope сохраняет отдельное elevated-подтверждение;
+- success отображается только после фактической verification;
+- demo mode не выполняет системные изменения.
+
 ## [0.4.0-alpha.1] — 2026-08-01
 
 ### Добавлено

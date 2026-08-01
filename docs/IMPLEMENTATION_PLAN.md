@@ -49,7 +49,27 @@ Discover → Diff → Plan → Confirm → Checkpoint → Apply → Verify → R
 - Environment Center и CLI;
 - unit-тесты и настоящий Windows CI vertical slice.
 
-## ⏭️ Этап 5 — общий Apply Engine
+## ✅ Этап 5 — Cyber Control Center (`0.5.0-alpha.1`)
+
+Визуальный и UX-слой, вдохновлённый NexRoute:
+
+- новый `CyberTerminalShell`;
+- зелёная high-contrast cyber-палитра;
+- boot и shutdown traces;
+- номерные operation channels;
+- Control Node telemetry;
+- Profile Vault и auto-discovery repository samples;
+- Environment Ops и Checkpoint Vault;
+- animated pipeline `handshake → operation → seal result`;
+- live event feed;
+- action-by-action transaction stream;
+- Deep Scan и Data Core;
+- cyber demo mode для Ubuntu/Windows CI;
+- отдельное SVG-превью и документация.
+
+Safety boundaries не изменены: frontend вызывает только `WinStateApplication` и не содержит системной реализации.
+
+## ⏭️ Этап 6 — общий Apply Engine (`0.6.0-alpha.1`)
 
 - единая cross-provider transaction model;
 - централизованная risk policy;
@@ -59,9 +79,9 @@ Discover → Diff → Plan → Confirm → Checkpoint → Apply → Verify → R
 - resume после перезапуска процесса;
 - reboot-pending state;
 - единый rollback нескольких providers;
-- terminal transaction dashboard.
+- live execution graph в Cyber Control Center.
 
-## Этап 6 — Packages и Windows Features
+## Этап 7 — Packages и Windows Features
 
 - WinGet provider;
 - optional features;
@@ -69,7 +89,7 @@ Discover → Diff → Plan → Confirm → Checkpoint → Apply → Verify → R
 - package ownership и remove policy;
 - reboot planning.
 
-## Этап 7 — Services, Registry, Git, PowerShell и Files
+## Этап 8 — Services, Registry, Git, PowerShell и Files
 
 - allowlisted registry provider;
 - services/startup/tasks;
@@ -77,7 +97,7 @@ Discover → Diff → Plan → Confirm → Checkpoint → Apply → Verify → R
 - PowerShell modules;
 - managed files and directories.
 
-## Этап 8 — Capture, drift и отчёты
+## Этап 9 — Capture, drift и отчёты
 
 - capture/export;
 - profile snapshots;
@@ -85,7 +105,7 @@ Discover → Diff → Plan → Confirm → Checkpoint → Apply → Verify → R
 - transaction history UI;
 - Markdown/JSON reports.
 
-## Этап 9 — release pipeline
+## Этап 10 — release pipeline
 
 - localization;
 - portable/self-contained Windows builds;

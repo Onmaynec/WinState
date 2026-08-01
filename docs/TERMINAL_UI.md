@@ -1,8 +1,10 @@
-# 🖥️ WinState Control Center
+# 🖥️ WinState Terminal UI
 
-## Назначение
+## Текущий frontend
 
-Control Center превращает WinState из набора аргументов командной строки в самостоятельную консольную утилиту. Панель запускается, когда `winstate` вызван без аргументов.
+Начиная с `0.5.0-alpha.1`, основной интерактивный интерфейс — **Cyber Control Center**.
+
+Полное руководство: [`CYBER_CONTROL_CENTER.md`](CYBER_CONTROL_CENTER.md).
 
 ```powershell
 winstate
@@ -16,85 +18,80 @@ winstate ui
 
 ## Управление
 
-- `↑` / `↓` — выбор раздела;
-- `Enter` — открыть раздел;
-- подтверждения `Y/N` — только перед изменением системы;
-- любая клавиша — вернуться в предыдущее меню;
-- `Ctrl+C` — отменить текущую операцию.
+- `↑` / `↓` — выбор operation channel;
+- `Enter` — открыть выбранный канал;
+- подтверждения `Y/N` — только перед системной операцией;
+- любая клавиша — вернуться в предыдущий экран;
+- `Ctrl+C` — отменить текущий workflow.
 
-## Экраны
+## Presentation contract
 
-### System Overview
+Terminal-проект отвечает только за:
 
-Показывает версию, платформу, архитектуру процесса, режим данных, количество найденных профилей, версию SQLite-схемы и рабочий каталог. В `0.4` дополнительно отображается готовность Environment Provider и количество обнаруженных variables/PATH entries.
+- layout и визуальную иерархию;
+- menu navigation;
+- boot/shutdown traces;
+- progress-анимации;
+- отображение plan, telemetry и action results;
+- интерактивные подтверждения;
+- безопасный demo mode.
 
-### Profile Center
+Terminal-проект не должен:
 
-Сканирует `ProfilesDirectory`, показывает `.yaml` и `.yml`, загружает выбранный профиль через Profile Engine и отображает число источников, переменных, environment values и PATH entries.
+- напрямую вызывать Windows API;
+- выполнять SQL;
+- изменять environment variables или PATH;
+- создавать rollback payload самостоятельно;
+- обходить `WinStateApplication`;
+- объявлять успех до получения verification result.
 
-### Environment Center
-
-Первый экран, который может безопасно изменять Windows. Он содержит:
-
-- **План и применение** — выбор профиля, discovery, diff, risk table, подтверждение, checkpoint, apply и verify;
-- **Текущее состояние** — количество User/Machine variables и PATH entries;
-- **Rollback checkpoint** — выбор сохранённой транзакции и восстановление в обратном порядке.
-
-Перед `apply` панель всегда показывает таблицу:
+## Cyber channels
 
 ```text
-Risk | Scope | Operation | Resource | Explanation
+[01] CONTROL NODE
+[02] PROFILE VAULT
+[03] ENVIRONMENT OPS
+[04] CHECKPOINT VAULT
+[05] DEEP SCAN
+[06] DATA CORE
+[07] NODE CONFIG
+[08] SYSTEM MAP
+[00] DISCONNECT
 ```
 
-User scope требует одного подтверждения. Если план содержит Machine scope, появляется отдельное красное подтверждение elevated-операций. При ошибке application workflow запускает автоматический rollback и показывает итог каждого действия.
+## Анимации
 
-### Doctor
+Основной pipeline:
 
-Запускает те же прикладные проверки, что и `winstate doctor`, но показывает их в отдельной таблице с цветными статусами и анимацией.
+```text
+handshake → operation → seal result
+```
 
-### Storage Center
+Анимация оборачивает реальную async-операцию. Средняя стадия завершается только после возврата результата из application layer.
 
-Применяет ожидающие миграции и показывает путь базы, версию схемы, размер и список пользовательских таблиц. Environment Provider записывает сюда transaction/action history и backup references.
+Transaction trace строится по `EnvironmentExecutionReport.Actions`, поэтому каждый `PASS`, `VERIFY-FAIL`, `ROLLBACK` или `ROLLBACK-FAIL` соответствует реальному статусу provider action.
 
-### Configuration
+## Цветовой язык
 
-Отображает вычисленные `Home`, `Profiles`, `Database`, `Logs`, `Config`, portable mode и log level.
+- зелёный — online, verified, safe channel;
+- тёмно-зелёный — структура, рамки, вторичные данные;
+- белый — активные значения;
+- серый — trace и пояснения;
+- жёлтый — warning, Medium risk, limited platform;
+- красный — failure и Machine confirmation.
 
-### Architecture & Roadmap
-
-Показывает цепочку `Terminal → App workflows → Core → Providers/Storage` и следующий этап разработки.
-
-## Анимации операций
-
-Spinner используется только вокруг действий, для которых действительно нужно ожидание:
-
-- запуск модулей;
-- discovery и построение diff;
-- Profile Engine;
-- checkpoint/apply/verify;
-- rollback;
-- Doctor;
-- SQLite migrations.
-
-Анимация не заменяет результат: после неё всегда отображается отдельная таблица с фактическим статусом.
-
-## Неинтерактивный режим
-
-Для CI существует безопасный снимок панели, который не ждёт нажатия клавиш:
+## Demo mode
 
 ```powershell
 winstate ui --demo --home .\.ci-winstate
 ```
 
-Обычные команды `doctor`, `validate`, `environment`, `config` и `storage` сохранены. Это позволяет использовать WinState в скриптах, тестах и автоматизации.
+Demo mode:
 
-## Визуальный стиль
+- не ожидает ввода;
+- отключает искусственные задержки;
+- не выполняет apply/rollback;
+- рендерит Control Node snapshot;
+- используется CI на Ubuntu и Windows.
 
-- голубой акцент для навигации и структуры;
-- зелёный для успешного состояния;
-- жёлтый для предупреждений, Medium risk и roadmap;
-- красный для ошибок и Machine confirmation;
-- закруглённые панели;
-- большой символьный логотип `WINSTATE`;
-- короткие spinner-анимации только вокруг реальных операций;
-- единая status line с версией и активными safeguards.
+CLI-команды `doctor`, `validate`, `environment`, `config` и `storage` остаются отдельным automation frontend и не зависят от интерактивного rendering.

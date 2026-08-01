@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="900" viewBox="0 0 1500 900" role="img" aria-labelledby="title desc">
+  <title id="title">WinState Cyber Control Center</title>
+  <desc id="desc">Схематическое превью зелёного hacker-style интерфейса WinState 0.5.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#020805"/>
+      <stop offset="0.52" stop-color="#07110b"/>
+      <stop offset="1" stop-color="#030705"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#00ff88"/>
+      <stop offset="1" stop-color="#7dffb2"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="2" fill="#000" opacity="0.12"/>
+    </pattern>
+  </defs>
+
+  <rect width="1500" height="900" rx="28" fill="#000"/>
+  <rect x="20" y="20" width="1460" height="860" rx="24" fill="url(#bg)" stroke="#174b2b" stroke-width="2"/>
+  <rect x="20" y="20" width="1460" height="860" rx="24" fill="url(#scan)"/>
+
+  <rect x="20" y="20" width="1460" height="52" rx="24" fill="#07130c"/>
+  <circle cx="54" cy="46" r="7" fill="#ff5f56"/>
+  <circle cx="78" cy="46" r="7" fill="#ffbd2e"/>
+  <circle cx="102" cy="46" r="7" fill="#27c93f"/>
+  <text x="750" y="53" text-anchor="middle" font-family="Consolas, monospace" font-size="17" fill="#7fa88c">WinState Cyber Control Center · v0.5.0-alpha.1</text>
+
+  <text x="64" y="138" font-family="Consolas, monospace" font-size="68" font-weight="700" fill="url(#green)" filter="url(#glow)">WINSTATE</text>
+  <text x="66" y="171" font-family="Consolas, monospace" font-size="17" fill="#55c879">CYBER CONTROL CENTER // STATE ORCHESTRATION NODE // SAFETY GATES ARMED</text>
+  <line x1="64" y1="195" x2="1436" y2="195" stroke="#0aff7b" stroke-width="2" opacity="0.55"/>
+
+  <text x="66" y="229" font-family="Consolas, monospace" font-size="16" fill="#22e478">CHANNEL://control-node</text>
+  <text x="1434" y="229" text-anchor="end" font-family="Consolas, monospace" font-size="15" fill="#668c72">SECURE INTERACTIVE SESSION · 11:45:27</text>
+
+  <rect x="64" y="254" width="675" height="250" rx="12" fill="#041009" stroke="#1c6c39" stroke-width="2"/>
+  <text x="88" y="287" font-family="Consolas, monospace" font-size="16" font-weight="700" fill="#32ff91">NODE TELEMETRY</text>
+  <line x1="88" y1="301" x2="714" y2="301" stroke="#164929"/>
+  <g font-family="Consolas, monospace" font-size="15">
+    <text x="88" y="334" fill="#5c8d6b">VERSION</text><text x="275" y="334" fill="#e7fff0">0.5.0-alpha.1</text>
+    <text x="88" y="368" fill="#5c8d6b">HOST</text><text x="275" y="368" fill="#e7fff0">DESKTOP-CYBER</text>
+    <text x="88" y="402" fill="#5c8d6b">PLATFORM</text><text x="275" y="402" fill="#e7fff0">Windows 11 x64</text>
+    <text x="88" y="436" fill="#5c8d6b">MODE</text><text x="275" y="436" fill="#32ff91">USER DATA</text>
+    <text x="88" y="470" fill="#5c8d6b">UPTIME</text><text x="275" y="470" fill="#e7fff0">04:18:42</text>
+  </g>
+
+  <rect x="761" y="254" width="675" height="250" rx="12" fill="#041009" stroke="#27a651" stroke-width="2"/>
+  <text x="785" y="287" font-family="Consolas, monospace" font-size="16" font-weight="700" fill="#32ff91">MODULE CHANNELS</text>
+  <line x1="785" y1="301" x2="1412" y2="301" stroke="#164929"/>
+  <g font-family="Consolas, monospace" font-size="15">
+    <text x="785" y="334" fill="#5c8d6b">PROFILE ENGINE</text><text x="1195" y="334" fill="#32ff91">ONLINE</text>
+    <text x="785" y="368" fill="#5c8d6b">DATA CORE</text><text x="1195" y="368" fill="#32ff91">ONLINE · SCHEMA 1</text>
+    <text x="785" y="402" fill="#5c8d6b">ENV PROVIDER</text><text x="1195" y="402" fill="#32ff91">ARMED</text>
+    <text x="785" y="436" fill="#5c8d6b">SAFEGUARDS</text><text x="1195" y="436" fill="#32ff91">PLAN + CHECKPOINT + VERIFY</text>
+    <text x="785" y="470" fill="#5c8d6b">ROLLBACK</text><text x="1195" y="470" fill="#32ff91">AUTO-ARMED</text>
+  </g>
+
+  <rect x="64" y="528" width="1372" height="94" rx="12" fill="#031009" stroke="#195f34"/>
+  <g font-family="Consolas, monospace">
+    <text x="116" y="558" fill="#618f70" font-size="13">USER VARS</text><text x="147" y="594" fill="#37ff96" font-size="26" font-weight="700">42</text>
+    <text x="340" y="558" fill="#618f70" font-size="13">MACHINE VARS</text><text x="384" y="594" fill="#37ff96" font-size="26" font-weight="700">18</text>
+    <text x="590" y="558" fill="#618f70" font-size="13">USER PATH</text><text x="626" y="594" fill="#37ff96" font-size="26" font-weight="700">12</text>
+    <text x="810" y="558" fill="#618f70" font-size="13">MACHINE PATH</text><text x="856" y="594" fill="#37ff96" font-size="26" font-weight="700">09</text>
+    <text x="1060" y="558" fill="#618f70" font-size="13">CHECKPOINTS</text><text x="1103" y="594" fill="#37ff96" font-size="26" font-weight="700">03</text>
+    <text x="1282" y="558" fill="#618f70" font-size="13">DB SIZE</text><text x="1300" y="594" fill="#37ff96" font-size="26" font-weight="700">96 KB</text>
+  </g>
+
+  <rect x="64" y="648" width="675" height="164" rx="12" fill="#031009" stroke="#1d6a3a"/>
+  <text x="88" y="681" font-family="Consolas, monospace" font-size="16" font-weight="700" fill="#32ff91">OPERATION CHANNELS</text>
+  <g font-family="Consolas, monospace" font-size="15">
+    <text x="88" y="716" fill="#32ff91">[01]</text><text x="145" y="716" fill="#e8fff0">CONTROL NODE</text><text x="390" y="716" fill="#5e8e6c">// live telemetry</text>
+    <text x="88" y="748" fill="#32ff91">[02]</text><text x="145" y="748" fill="#e8fff0">PROFILE VAULT</text><text x="390" y="748" fill="#5e8e6c">// YAML intelligence</text>
+    <text x="88" y="780" fill="#32ff91">[03]</text><text x="145" y="780" fill="#e8fff0">ENVIRONMENT OPS</text><text x="390" y="780" fill="#5e8e6c">// execute safely</text>
+  </g>
+
+  <rect x="761" y="648" width="675" height="164" rx="12" fill="#031009" stroke="#1d6a3a"/>
+  <text x="785" y="681" font-family="Consolas, monospace" font-size="16" font-weight="700" fill="#32ff91">LIVE EVENT FEED</text>
+  <g font-family="Consolas, monospace" font-size="14">
+    <text x="785" y="716" fill="#607f69">11:45:24</text><text x="895" y="716" fill="#32ff91">›</text><text x="925" y="716" fill="#e8fff0">PROFILE</text><text x="1065" y="716" fill="#72947c">3 profile(s) indexed</text>
+    <text x="785" y="748" fill="#607f69">11:45:25</text><text x="895" y="748" fill="#32ff91">›</text><text x="925" y="748" fill="#e8fff0">STORAGE</text><text x="1065" y="748" fill="#72947c">migration chain verified</text>
+    <text x="785" y="780" fill="#607f69">11:45:26</text><text x="895" y="780" fill="#32ff91">›</text><text x="925" y="780" fill="#e8fff0">GUARD</text><text x="1065" y="780" fill="#72947c">rollback channel armed</text>
+  </g>
+
+  <rect x="64" y="834" width="1372" height="28" rx="7" fill="#072012"/>
+  <text x="82" y="853" font-family="Consolas, monospace" font-size="13" fill="#36ff95">● SECURE</text>
+  <text x="190" y="853" font-family="Consolas, monospace" font-size="13" fill="#648b70">SYSTEM MUTATIONS LOCKED BEHIND PLAN · CHECKPOINT · VERIFY · ROLLBACK</text>
+  <text x="1418" y="853" text-anchor="end" font-family="Consolas, monospace" font-size="13" fill="#36ff95">↑↓ SELECT · ENTER OPEN · CTRL+C ABORT</text>
+</svg>
