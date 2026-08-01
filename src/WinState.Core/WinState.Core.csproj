@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\WinState.Domain\WinState.Domain.csproj" />
+  </ItemGroup>
+  <PropertyGroup>
+    <Description>Независимые движки профилей и планирования WinState.</Description>
+  </PropertyGroup>
+</Project>
