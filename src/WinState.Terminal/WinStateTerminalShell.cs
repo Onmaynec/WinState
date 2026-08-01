@@ -175,7 +175,8 @@ public sealed class WinStateTerminalShell
 
     private async Task ValidateProfileAsync(ProfileCatalogEntry entry, CancellationToken cancellationToken)
     {
-        (LoadedProfile Loaded, ProfileValidationResult Validation) result = default!;
+        LoadedProfile? loaded = null;
+        ProfileValidationResult? validation = null;
         Exception? failure = null;
         await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
@@ -184,7 +185,9 @@ public sealed class WinStateTerminalShell
             {
                 try
                 {
-                    result = await _application.ValidateProfileAsync(entry.Path, cancellationToken);
+                    var result = await _application.ValidateProfileAsync(entry.Path, cancellationToken);
+                    loaded = result.Loaded;
+                    validation = result.Validation;
                 }
                 catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
                 {
@@ -193,9 +196,10 @@ public sealed class WinStateTerminalShell
             });
 
         RenderHeader("PROFILE REPORT");
-        if (failure is not null)
+        if (failure is not null || loaded is null || validation is null)
         {
-            AnsiConsole.Write(new Panel(Markup.Escape(failure.Message))
+            var message = failure?.Message ?? "Profile Engine не вернул результат.";
+            AnsiConsole.Write(new Panel(Markup.Escape(message))
                 .Header(new PanelHeader(" LOAD FAILED "))
                 .BorderStyle(new Style(Color.Red))
                 .Border(BoxBorder.Rounded));
@@ -203,25 +207,25 @@ public sealed class WinStateTerminalShell
             return;
         }
 
-        var profile = result.Loaded.Profile;
+        var profile = loaded.Profile;
         var summary = new Table()
             .Border(TableBorder.Rounded)
-            .BorderStyle(new Style(result.Validation.IsValid ? Color.Green : Color.Yellow))
+            .BorderStyle(new Style(validation.IsValid ? Color.Green : Color.Yellow))
             .AddColumn("Параметр")
             .AddColumn("Значение");
         summary.AddRow("Имя", Markup.Escape(profile.Metadata.Name));
-        summary.AddRow("Источники", result.Loaded.SourceFiles.Count.ToString());
-        summary.AddRow("Переменные", result.Loaded.Variables.Count.ToString());
+        summary.AddRow("Источники", loaded.SourceFiles.Count.ToString());
+        summary.AddRow("Переменные", loaded.Variables.Count.ToString());
         summary.AddRow("User environment", profile.Environment.User.Count.ToString());
         summary.AddRow("Machine environment", profile.Environment.Machine.Count.ToString());
         summary.AddRow("PATH entries", (profile.Environment.UserPath.Count + profile.Environment.MachinePath.Count).ToString());
-        summary.AddRow("Результат", result.Validation.IsValid ? "[green]VALID[/]" : "[yellow]ISSUES FOUND[/]");
+        summary.AddRow("Результат", validation.IsValid ? "[green]VALID[/]" : "[yellow]ISSUES FOUND[/]");
         AnsiConsole.Write(summary);
 
-        if (!result.Validation.IsValid)
+        if (!validation.IsValid)
         {
             var issues = new Table().Border(TableBorder.Simple).AddColumn("Path").AddColumn("Проблема");
-            foreach (var issue in result.Validation.Issues)
+            foreach (var issue in validation.Issues)
             {
                 issues.AddRow(Markup.Escape(issue.Path), Markup.Escape(issue.Message));
             }
