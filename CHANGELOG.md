@@ -2,6 +2,56 @@
 
 Все заметные изменения WinState документируются в этом файле.
 
+## [0.8.0-alpha.1] — 2026-08-01
+
+### Добавлено
+
+- production provider `windows.system`;
+- allowlisted Registry values в `HKCU\Software` и `HKLM\SOFTWARE`;
+- Registry types `string`, `expandString`, `dword`, `qword`, `multiString` и `binary`;
+- управление состоянием и start mode существующих Windows Services;
+- Startup entries через стандартный Registry Run key;
+- Scheduled Tasks со schedules `logon`, `startup` и `daily`;
+- XML backup/restore существующих Scheduled Tasks;
+- отдельный совместимый system-control YAML loader с includes, extends и variables;
+- targeted discovery и deterministic action identities;
+- per-resource checkpoint payloads для Registry, Services, Startup и Tasks;
+- post-operation verification и rollback через Unified Apply Engine;
+- dependency links через общий action graph;
+- cross-platform client factory с безопасным unsupported adapter;
+- unit-тесты через `IWindowsSystemClient`;
+- безопасный sample `samples/system-control/safe-workstation.yaml`;
+- руководство `docs/SYSTEM_CONTROL.md`;
+- SCM и Task Scheduler prerequisite scan в Windows CI.
+
+### Изменено
+
+- версия приложения и CLI обновлена до `0.8.0-alpha.1`;
+- Unified Apply Engine регистрирует четвёртый production adapter `windows.system`;
+- Profile validation проверяет system-control секции;
+- Forge demo публикует сигнатуру нового provider;
+- README и roadmap обновлены под Windows System Control Plane;
+- release package smoke test использует версию `0.8.0-alpha.1`.
+
+### Безопасность
+
+- Registry paths вне Software allowlist блокируются до построения плана;
+- HKLM, Services, machine Startup и elevated/startup Tasks требуют administrator policy;
+- удаление Registry/Startup/Task и остановка/отключение Service имеют повышенный risk;
+- системные утилиты запускаются через `ProcessStartInfo.ArgumentList`;
+- checkpoints создаются до первой мутации;
+- success фиксируется только после повторного чтения состояния;
+- скрытое elevation и автоматическая перезагрузка отсутствуют;
+- CI использует fake client и не изменяет реальные системные ресурсы.
+
+### Ограничения
+
+- WinState не создаёт и не удаляет service definitions;
+- Registry намеренно ограничен Software allowlist;
+- dependency references для System Control пока задаются точными action IDs;
+- persistent ownership store перенесён в этап Capture/Drift;
+- Authenticode signing запланирован для stable pipeline.
+
 ## [0.7.0-alpha.1] — 2026-08-01
 
 ### Добавлено
