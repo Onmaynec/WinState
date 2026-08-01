@@ -44,6 +44,14 @@
         "userPath": { "$ref": "#/$defs/pathEntries" },
         "machinePath": { "$ref": "#/$defs/pathEntries" }
       }
+    },
+    "packages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/wingetPackage" }
+    },
+    "features": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/windowsFeature" }
     }
   },
   "$defs": {
@@ -61,6 +69,30 @@
           "state": { "enum": ["present", "absent"], "default": "present" },
           "position": { "enum": ["prepend", "append"], "default": "append" }
         }
+      }
+    },
+    "wingetPackage": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "state": { "enum": ["present", "absent"], "default": "present" },
+        "version": { "type": "string", "minLength": 1, "default": "latest" },
+        "source": { "type": "string", "minLength": 1, "default": "winget" },
+        "scope": { "enum": ["user", "machine"], "default": "user" },
+        "allowUpgrade": { "type": "boolean", "default": true },
+        "mayRequireReboot": { "type": "boolean", "default": false }
+      }
+    },
+    "windowsFeature": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "state": { "enum": ["enabled", "disabled"], "default": "enabled" },
+        "includeParents": { "type": "boolean", "default": true }
       }
     }
   }
