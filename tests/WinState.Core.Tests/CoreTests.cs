@@ -5,6 +5,7 @@ using WinState.Domain.Errors;
 using WinState.Domain.Planning;
 using WinState.Domain.Profiles;
 using WinState.Domain.Resources;
+using Xunit;
 
 namespace WinState.Core.Tests;
 
