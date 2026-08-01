@@ -128,6 +128,8 @@ namespace WinState.Domain.Profiles
         public required ProfileMetadata Metadata { get; init; }
         public ProfileSettings Settings { get; init; } = new();
         public EnvironmentProfileSection Environment { get; init; } = new();
+        public IReadOnlyCollection<WingetPackageProfile> Packages { get; init; } = Array.Empty<WingetPackageProfile>();
+        public IReadOnlyCollection<WindowsFeatureProfile> Features { get; init; } = Array.Empty<WindowsFeatureProfile>();
         public IReadOnlyCollection<string> Includes { get; init; } = Array.Empty<string>();
         public IReadOnlyCollection<string> Extends { get; init; } = Array.Empty<string>();
     }
@@ -160,6 +162,24 @@ namespace WinState.Domain.Profiles
         public required string Path { get; init; }
         public string State { get; init; } = "present";
         public string Position { get; init; } = "append";
+    }
+
+    public sealed record WingetPackageProfile
+    {
+        public required string Id { get; init; }
+        public string State { get; init; } = "present";
+        public string Version { get; init; } = "latest";
+        public string Source { get; init; } = "winget";
+        public string Scope { get; init; } = "user";
+        public bool AllowUpgrade { get; init; } = true;
+        public bool MayRequireReboot { get; init; }
+    }
+
+    public sealed record WindowsFeatureProfile
+    {
+        public required string Name { get; init; }
+        public string State { get; init; } = "enabled";
+        public bool IncludeParents { get; init; } = true;
     }
 }
 
