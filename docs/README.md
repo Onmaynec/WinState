@@ -1,6 +1,7 @@
 # 📚 Документация WinState
 
-- [🖥️ Control Center](TERMINAL_UI.md)
+- [🟢 Cyber Control Center](CYBER_CONTROL_CENTER.md)
+- [🖥️ Terminal UI contracts](TERMINAL_UI.md)
 - [🧩 Profile Engine](PROFILE_ENGINE.md)
 - [🌿 Environment Provider](ENVIRONMENT_PROVIDER.md)
 - [🏗️ Архитектура](ARCHITECTURE.md)
@@ -11,4 +12,4 @@
 - [🛡️ Безопасность](SECURITY.md)
 - [🗺️ План реализации](IMPLEMENTATION_PLAN.md)
 
-Текущий этап: `0.4.0-alpha.1` — первый реальный Windows Environment Provider с безопасным циклом `discover → plan → checkpoint → apply → verify → rollback`. Интерактивный Control Center и CLI используют один application workflow.
+Текущий этап: `0.5.0-alpha.1` — Cyber Control Center с NexRoute-inspired визуальным языком, номерными operation channels, boot/action traces и анимированными pipelines. Системные операции по-прежнему проходят безопасный цикл `discover → plan → checkpoint → apply → verify → rollback` через единый application workflow.
