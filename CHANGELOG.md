@@ -2,33 +2,45 @@
 
 Все заметные изменения WinState документируются в этом файле.
 
-## [0.2.0-alpha.1] — 2026-08-01
+## [0.3.0-alpha.1] — 2026-08-01
 
 ### Добавлено
 
-- проекты `WinState.App`, `WinState.Infrastructure`, `WinState.Storage`;
-- dependency injection и структурированное console logging;
-- загрузка `winstate.json` и переменных окружения `WINSTATE_*`;
-- вычисление user-data и portable путей;
-- SQLite-хранилище с транзакционными идемпотентными миграциями;
-- начальные таблицы профилей, ownership, baseline, транзакций и drift;
-- CLI-команды `doctor`, `config show/path`, `storage migrate/status`;
-- unit-тесты конфигурации и SQLite-схемы;
-- smoke tests `doctor` и `storage` на Ubuntu и Windows;
-- документация конфигурации и локального хранилища;
-- новое SVG-превью команды `doctor`.
+- интерактивный WinState Control Center, запускаемый без аргументов;
+- стрелочное управление через `↑`, `↓` и `Enter`;
+- большой символьный логотип, отдельные панели и статусная строка;
+- spinner-анимации загрузки, диагностики, Profile Engine и SQLite;
+- экраны System Overview, Profile Center, Doctor, Storage, Configuration и Roadmap;
+- отдельный проект `WinState.Terminal` без бизнес-логики;
+- `winstate ui` и неинтерактивный `winstate ui --demo` для CI;
+- полноценный YAML Profile Engine на YamlDotNet;
+- `includes`, `extends` и обнаружение циклов;
+- переменные `{{name}}`, `${name}`, `WINSTATE_VAR_*` и `--var name=value`;
+- объединение environment-секций и нормализация PATH;
+- sample-профили inheritance/variables;
+- unit-тесты Profile Engine и новые smoke tests интерфейса.
+
+### Изменено
+
+- запуск `winstate` без параметров теперь открывает панель вместо обычной справки;
+- CLI оставлен как совместимый слой для автоматизации;
+- документация и README переработаны под формат полноценной terminal utility.
 
 ### Ограничения
 
-- Profile Engine пока остаётся bootstrap-реализацией;
-- Environment Provider и изменение Windows будут реализованы после полного Profile Engine;
-- SQLite пока хранит только схему и migration history.
+- Control Center пока не применяет системные настройки;
+- следующий этап — Environment Provider vertical slice;
+- conditions, secrets adapter и expression language ещё не реализованы.
+
+## [0.2.0-alpha.1] — 2026-08-01
+
+- application skeleton с DI и logging;
+- конфигурация, portable paths, SQLite и миграции;
+- команды `doctor`, `config` и `storage`;
+- Linux/Windows CI.
 
 ## [0.1.0-alpha.1] — 2026-08-01
 
-### Добавлено
-
 - архитектурное ядро и доменные контракты;
-- базовый CLI, YAML reader и dependency graph;
-- unit-тесты и GitHub Actions;
-- русская документация и SVG-превью.
+- bootstrap YAML reader и dependency graph;
+- тесты, документация и release scripts.

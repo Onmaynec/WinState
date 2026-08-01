@@ -3,52 +3,125 @@
 </p>
 
 <p align="center">
-  <strong>Сохраняйте конфигурацию Windows как код, заранее проверяйте изменения и проектируйте безопасный rollback.</strong>
+  <strong>Интерактивная консольная утилита для декларативного управления состоянием Windows.</strong>
 </p>
 
 <p align="center">
+  <a href="docs/TERMINAL_UI.md">🖥️ Control Center</a> ·
+  <a href="docs/PROFILE_ENGINE.md">🧩 Profile Engine</a> ·
   <a href="docs/ARCHITECTURE.md">🏗️ Архитектура</a> ·
-  <a href="docs/CONFIGURATION.md">⚙️ Конфигурация</a> ·
-  <a href="docs/STORAGE.md">🗄️ SQLite</a> ·
+  <a href="docs/SECURITY.md">🛡️ Безопасность</a> ·
   <a href="docs/IMPLEMENTATION_PLAN.md">🗺️ Roadmap</a>
 </p>
 
 ---
 
-## ✨ Что такое WinState?
+## ✨ WinState 0.3
 
-**WinState** — open-source CLI-инструмент для Windows 10/11, который постепенно строится вокруг безопасного жизненного цикла:
+**WinState** больше не выглядит как обычный набор команд для CMD. При запуске без аргументов открывается собственный полноэкранный **Control Center** с крупным символьным логотипом, панелями, стрелочным управлением и анимациями операций.
 
-```text
-Capture → Compare → Plan → Apply → Verify → Rollback
+```powershell
+# Интерактивный режим
+winstate
+
+# Во время разработки
+dotnet run --project src/WinState.Cli
 ```
 
-> **Текущий статус:** `0.2.0-alpha.1`. Реализован рабочий application skeleton: DI, logging, конфигурация, portable paths, SQLite и миграции. Системные настройки Windows пока не изменяются.
+CLI-команды сохранены для CI, скриптов и автоматизации:
 
-## 🩺 Превью WinState Doctor
+```powershell
+winstate doctor
+winstate validate .\profiles\workstation.yaml --var developerName=Roman
+winstate storage status
+```
+
+## 🖥️ Превью Control Center
 
 <p align="center">
-  <img src="assets/screenshots/doctor-preview.svg" alt="Превью команды winstate doctor" width="92%" />
+  <img src="assets/screenshots/terminal-dashboard.svg" alt="WinState Control Center" width="94%" />
 </p>
+
+> Превью схематически показывает интерфейс терминала. Реальный вид зависит от шрифта, размера окна и поддержки ANSI-цветов.
+
+## 🎛️ Управление
+
+| Клавиша | Действие |
+|---|---|
+| `↑` / `↓` | перемещение по меню |
+| `Enter` | открыть выбранный раздел |
+| любая клавиша | вернуться в Control Center |
+| `Ctrl+C` | безопасно отменить текущую операцию |
+
+Разделы панели:
+
+- **Обзор системы** — версия, платформа, режим, профили и SQLite;
+- **Центр профилей** — поиск и проверка YAML-файлов;
+- **Диагностика** — оформленный Doctor с анимацией;
+- **Хранилище** — миграции, таблицы и размер базы;
+- **Конфигурация** — вычисленные пути и режим запуска;
+- **Архитектура и roadmap** — карта модулей и следующий этап.
+
+## 🧩 Полный Profile Engine
+
+Версия `0.3.0-alpha.1` заменяет bootstrap-reader полноценным загрузчиком YAML:
+
+- `includes` и `extends`;
+- обнаружение циклов наследования;
+- переменные `{{name}}` и `${name}`;
+- значения `WINSTATE_VAR_*`;
+- CLI-переопределения `--var name=value`;
+- объединение environment-секций;
+- нормализация и дедупликация PATH;
+- список всех исходных файлов профиля;
+- подробная валидация результата.
+
+Пример:
+
+```yaml
+schemaVersion: 1
+
+extends:
+  - base.yaml
+
+metadata:
+  name: "{{developerName}} Workstation"
+
+variables:
+  developerName: Developer
+
+environment:
+  user:
+    DEV_MODE: "${mode}"
+```
+
+```powershell
+winstate validate .\samples\profile-engine\workstation.yaml `
+  --var developerName=Roman `
+  --var mode=true
+```
+
+Подробнее: [`docs/PROFILE_ENGINE.md`](docs/PROFILE_ENGINE.md).
 
 ## ✅ Что уже работает
 
-| Область | Состояние |
+| Возможность | Статус |
 |---|---|
-| Доменная модель и provider contracts | ✅ |
-| Bootstrap YAML validation | ✅ |
-| Dependency graph | ✅ |
-| Dependency injection | ✅ |
-| Console logging | ✅ |
-| `winstate.json` и `WINSTATE_*` | ✅ |
-| User-data / portable paths | ✅ |
-| SQLite + migration history | ✅ |
-| `doctor`, `config`, `storage` | ✅ |
-| Unit tests и Linux/Windows CI | ✅ |
-| Полный Profile Engine | ⏭️ следующий этап |
-| Изменение Windows | 🧭 после Profile Engine |
+| Интерактивная панель со стрелками | ✅ |
+| Большой символьный логотип и отдельные экраны | ✅ |
+| Анимации загрузки и операций | ✅ |
+| CLI-режим для автоматизации | ✅ |
+| Profile Engine: includes / extends | ✅ |
+| Variables и normalization | ✅ |
+| Dependency injection и logging | ✅ |
+| SQLite и миграции | ✅ |
+| Doctor / config / storage | ✅ |
+| Linux + Windows CI | ✅ |
+| Изменение системных настроек Windows | ⏭️ следующий vertical slice |
 
 ## 🚀 Быстрый старт
+
+Требуется **.NET 8 SDK**.
 
 ```powershell
 git clone https://github.com/Onmaynec/WinState.git
@@ -58,37 +131,52 @@ dotnet restore
 dotnet build -c Release
 dotnet test -c Release
 
-dotnet run --project src/WinState.Cli -- --help
-dotnet run --project src/WinState.Cli -- doctor --home .\.winstate-dev
-dotnet run --project src/WinState.Cli -- storage status --home .\.winstate-dev
+dotnet run --project src/WinState.Cli
 ```
 
-## ⚙️ Конфигурация
+Для отдельного рабочего каталога:
 
 ```powershell
-winstate config show
-winstate config path
+dotnet run --project src/WinState.Cli -- --home .\.winstate-dev
 ```
 
-Поддерживаются `WINSTATE_HOME`, `WINSTATE_PROFILES`, `WINSTATE_DATABASE`, `WINSTATE_LOGS`, `WINSTATE_LOG_LEVEL` и `WINSTATE_PORTABLE`.
+## 🧱 Архитектура
 
-## 🗄️ SQLite
-
-```powershell
-winstate storage migrate
-winstate storage status
+```text
+WinState.Terminal  → панели, меню, анимации
+        ↓
+WinState.App       → DI и прикладные сценарии
+        ↓
+WinState.Core      → Profile Engine и planning
+        ├── WinState.Infrastructure → config и platform paths
+        ├── WinState.Storage        → SQLite и migrations
+        └── WinState.Domain         → модели и provider contracts
 ```
 
-Миграции транзакционны и идемпотентны. Начальная схема готовит таблицы для профилей, ownership, baseline, транзакций, backup metadata и drift.
+Интерактивный UI не содержит бизнес-логики: все операции выполняются через `WinStateApplication`.
 
 ## 🛡️ Безопасность
 
-WinState не хранит секреты в конфигурации или SQLite, не применяет системные изменения вслепую и не обещает полный backup Windows. Опасные provider-функции появятся только вместе с планом, подтверждением, checkpoint, verification и rollback.
+Текущая версия **не изменяет настройки Windows**. Перед первым системным провайдером будут обязательны execution plan, оценка риска, checkpoint, verification и rollback. WinState не хранит секреты в профилях, логах или SQLite и не заменяет полноценный backup.
 
 ## 🗺️ Следующий этап
 
-`0.3.0-alpha.1` — полный Profile Engine: YAML loading, includes, inheritance, variables и normalization.
+Первый полный vertical slice — **Environment Provider**:
+
+```text
+Discover → Diff → Plan → Confirm → Apply → Verify → Rollback
+```
+
+Он добавит реальное управление пользовательскими и системными переменными окружения, включая PATH, но только после безопасного плана и резервирования предыдущего состояния.
+
+## 📦 Сборка portable ZIP
+
+```powershell
+.\scripts\package.ps1
+```
+
+Архив и SHA-256 появятся в `artifacts/`.
 
 ## 📄 Лицензия
 
-MIT License.
+MIT License — см. [`LICENSE`](LICENSE).
