@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Общий multi-provider transaction engine WinState.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinState.Domain\WinState.Domain.csproj" />
+  </ItemGroup>
+</Project>

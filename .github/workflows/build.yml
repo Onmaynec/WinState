@@ -33,16 +33,18 @@ jobs:
         run: |
           $version = dotnet run --project src/WinState.Cli --configuration Release --no-build -- --version
           if ($LASTEXITCODE -ne 0) { throw "Version command failed." }
-          if ($version -notmatch "0.5.0-alpha.1") { throw "Unexpected WinState version: $version" }
+          if ($version -notmatch "0.6.0-alpha.1") { throw "Unexpected WinState version: $version" }
       - name: Profile Engine smoke test
         run: dotnet run --project src/WinState.Cli --configuration Release --no-build -- validate samples/profile-engine/workstation.yaml --var developerName=CI --var mode=true
-      - name: Cyber Control Center smoke test
+      - name: Nexus Control Fabric smoke test
         shell: pwsh
         run: |
           $stateHome = Join-Path $PWD ".ci-winstate"
           $output = dotnet run --project src/WinState.Cli --configuration Release --no-build -- ui --demo --home $stateHome | Out-String
-          if ($LASTEXITCODE -ne 0) { throw "Cyber Control Center demo failed." }
-          if ($output -notmatch "CYBER CONTROL CENTER") { throw "Cyber Control Center signature was not rendered." }
+          if ($LASTEXITCODE -ne 0) { throw "Nexus demo failed." }
+          if ($output -notmatch "NEXUS CONTROL FABRIC") { throw "Nexus signature was not rendered." }
+          if ($output -notmatch "TRANSACTION MATRIX") { throw "Apply Engine panel was not rendered." }
+          if ($output -notmatch "UPDATE UPLINK") { throw "Update panel was not rendered." }
           Write-Host $output
       - name: Environment Provider status
         shell: pwsh
@@ -82,3 +84,16 @@ jobs:
           $stateHome = Join-Path $PWD ".ci-winstate"
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- doctor --home $stateHome
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- storage status --home $stateHome
+      - name: Self-update package smoke test
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\scripts\package.ps1 -Runtime win-x64 -Version 0.6.0-alpha.1
+          $archive = Join-Path $PWD "artifacts/WinState-0.6.0-alpha.1-win-x64.zip"
+          $checksum = "$archive.sha256"
+          if (-not (Test-Path $archive)) { throw "Release ZIP was not created." }
+          if (-not (Test-Path $checksum)) { throw "SHA-256 file was not created." }
+          $extract = Join-Path $PWD ".ci-package"
+          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+          if (-not (Test-Path (Join-Path $extract "winstate.release.json"))) { throw "Release marker is missing." }
+          if (-not (Test-Path (Join-Path $extract "winstate.exe"))) { throw "Windows apphost is missing." }

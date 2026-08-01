@@ -1,184 +1,221 @@
 # 🏗️ Архитектура WinState
 
-> Текущий статус: **`0.5.0-alpha.1` — Cyber Control Center поверх безопасного Windows provider vertical slice**.
+> Текущий статус: **`0.6.0-alpha.1` — Nexus UI, Unified Apply Engine и Update Uplink**.
 
-WinState строится вокруг безопасного конвейера:
+## Общий pipeline
 
 ```text
-Profile → Validation → Discovery → Diff → Plan → Confirmation
-              │                                  │
-              └──────── Diagnostics              ▼
-                                           Checkpoint
-                                                ▼
-                                              Apply
-                                                ▼
-                                             Verify
-                                                ▼
-                                      SQLite Transaction
-                                                ▼
-                                             Rollback
+YAML Profile
+    ↓
+Profile Engine → Validation
+    ↓
+Provider Discovery → Provider Plans
+    ↓
+WinState.Apply
+    ├─ merge execution graph
+    ├─ dependency validation/sort
+    ├─ risk groups and policy gates
+    ├─ checkpoint barrier
+    ├─ apply + verify
+    ├─ persisted manifest / resume
+    └─ cross-provider rollback
+    ↓
+SQLite history + provider backup payloads
 ```
 
-Cyber Control Center визуализирует этот pipeline, но не реализует его заново.
+Update pipeline существует отдельно от system apply:
 
-## Границы модулей
+```text
+Cyber Nexus → WinState.Update → GitHub Releases
+                           → ZIP + SHA-256
+                           → safe staging
+                           → external updater process
+```
 
-| Модуль | Ответственность | Запрещённые зависимости |
+## Модули
+
+| Модуль | Ответственность | Не должен содержать |
 |---|---|---|
-| `WinState.Domain` | ресурсы, состояния, действия, транзакции, provider contracts | Windows API, YAML, SQLite, CLI/UI |
-| `WinState.Core` | Profile Engine, validation, dependency graph, plan primitives | UI и конкретные Windows adapters |
-| `WinState.Infrastructure` | конфигурация, platform paths и прикладные adapters | Terminal UI |
-| `WinState.Storage` | SQLite migrations, transaction/action/backup history | CLI и Spectre.Console |
-| `WinState.Providers.Environment` | Windows environment discovery/apply/verify/rollback | UI и общий workflow |
-| `WinState.App` | composition root и безопасные application workflows | terminal rendering |
-| `WinState.Terminal` | Cyber UI, меню, telemetry, traces, confirmations и анимации | прямой Windows API и SQLite SQL |
-| `WinState.Cli` | команды, flags, exit codes и automation output | системная реализация provider |
+| `WinState.Domain` | resources, actions, risks, provider/transaction contracts | YAML, Windows API, UI, HTTP, SQLite |
+| `WinState.Core` | Profile Engine, validation и plan primitives | concrete providers и UI |
+| `WinState.Apply` | unified graph, transaction manifest, resume и rollback | YAML, Spectre.Console, provider-specific API |
+| `WinState.Update` | release discovery, SemVer, download, SHA-256, staging/updater | system configuration apply |
+| `WinState.Infrastructure` | settings и platform paths | Terminal UI |
+| `WinState.Storage` | SQLite migrations и transaction history | UI и provider implementation |
+| `WinState.Providers.Environment` | User/Machine variables и PATH | UI и common transaction orchestration |
+| `WinState.App` | composition root и workflow adapters | terminal rendering |
+| `WinState.Terminal` | Nexus/Cyber UI, prompts, traces и animations | Windows API и raw SQL |
+| `WinState.Cli` | entry point, flags и automation output | provider implementation |
 
-## Направление зависимостей
+## Dependency direction
 
 ```text
-WinState.Cli ───────┐
-                    ▼
-CyberTerminalShell → WinState.App
-                         │
-             ┌───────────┼────────────┐
-             ▼           ▼            ▼
-        WinState.Core  Storage   Providers.Environment
-             │           │            │
-             └───────────┴────────────┘
-                         ▼
-                  WinState.Domain
+WinState.Cli
+    ↓
+WinState.Terminal ───────────────→ WinState.Update
+    ↓
+WinState.App
+    ├──────────────→ WinState.Apply
+    ├──────────────→ WinState.Core
+    ├──────────────→ WinState.Storage
+    └──────────────→ Providers.Environment
+                          ↓
+                    WinState.Domain
 ```
 
-`Domain` не знает о верхних слоях. `CyberTerminalShell` и automation CLI вызывают один application workflow и не могут обойти safeguards.
+`Domain` остаётся нижним слоем. `Apply` зависит только от Domain contracts. `Update` — самостоятельная библиотека без зависимости от application state engine.
 
-## Cyber frontend boundary
+## Provider adapter boundary
 
-`CyberTerminalShell` отвечает только за presentation:
+Common engine работает через:
 
-```text
-boot trace
-operation channel menu
-telemetry tables
-animated progress pipeline
-action-by-action result stream
-confirmation prompts
-demo rendering
+```csharp
+IApplyProviderExecutor
 ```
 
-Он получает данные только через публичные методы `WinStateApplication`:
+Adapter предоставляет:
 
 ```text
-GetEnvironmentStatusAsync
-PlanEnvironmentAsync
-ApplyEnvironmentAsync
-ListEnvironmentCheckpointsAsync
-RollbackEnvironmentAsync
-ValidateProfileAsync
-RunDoctorAsync
-GetStorageStatusAsync
+PrepareRollbackAsync
+ApplyAsync
+VerifyAsync
+RollbackAsync
 ```
 
-Frontend не создаёт `PlannedAction`, backup payload или SQL-запросы самостоятельно.
-
-## Animation truthfulness
-
-Анимированный pipeline выглядит так:
+В `0.6`:
 
 ```text
-handshake → operation → seal result
-```
-
-Средняя фаза оборачивает настоящий async-вызов application layer. Она не переводится в completed до возврата результата. После транзакции action stream строится по `EnvironmentExecutionReport.Actions`.
-
-Это исключает ложный UI-success: зелёный verified result появляется только после provider verification.
-
-## Environment Provider vertical slice
-
-### Adapter boundary
-
-Системный доступ скрыт за `IEnvironmentStore`:
-
-```text
+EnvironmentApplyExecutor
+        ↓
 EnvironmentStateProvider
-        ├── WindowsEnvironmentStore  → реальный User/Machine environment
-        └── InMemoryEnvironmentStore → unit-тесты
+        ├─ WindowsEnvironmentStore
+        └─ InMemoryEnvironmentStore
 ```
 
-Это позволяет тестировать plan, apply, verify и rollback без изменения машины разработчика.
+Будущие WinGet и Optional Features providers зарегистрируют собственные executors.
 
-### Планирование
+## Unified execution graph
 
-1. Profile Engine нормализует YAML.
-2. `EnvironmentProfileMapper` преобразует environment-секцию в `StateResource`.
-3. Provider выполняет discovery.
-4. `PlanAsync` создаёт только необходимые `PlannedAction`.
-5. PATH actions одного scope связываются dependencies для детерминированного порядка.
-6. `DependencyGraph` возвращает итоговый execution order.
+`ApplyEngine.BuildPlan`:
 
-Plan не изменяет систему и может выполняться сколько угодно раз.
+1. проверяет `ActionId`;
+2. проверяет `DependsOn`;
+3. обнаруживает cycle;
+4. делает deterministic topological sort;
+5. выделяет provider set;
+6. строит risk groups;
+7. вычисляет admin/reboot/irreversible flags.
 
-### Исполнение
+Provider-specific порядок может быть выражен только dependencies, а не скрытым UI-поведением.
 
-`EnvironmentWorkflow` оркестрирует provider:
+## Checkpoint barrier
 
 ```text
-PlanAsync
-→ validate risk/scope
-→ PrepareRollbackAsync for every action
-→ write manifest
-→ ApplyAsync
-→ VerifyAsync
-→ record SQLite history
-→ RollbackAsync on failure/request
+Prepare provider A action 1
+Prepare provider B action 2
+Prepare provider A action 3
+Persist manifest
+============================ no mutation above this line
+Apply action 1
 ```
 
-Checkpoint создаётся для всего плана до первого изменения.
+Отсутствующий обязательный checkpoint блокирует всю транзакцию.
 
-### Хранилище
+## Persisted transaction
 
 ```text
-Transactions       → итог workflow
-TransactionActions → status/message каждого action
-ActionBackups      → путь к checkpoint JSON
+<WINSTATE_HOME>/backups/transactions/<transaction-id>/
+├── transaction.json
+└── providers/
+    ├── environment/
+    └── <provider-id>/
 ```
 
-Сами backup payloads хранятся в файловом каталоге, а SQLite содержит ссылки и историю.
+Manifest обновляется после каждого verified action через temporary file и replacement. Это позволяет продолжить graph после controlled interruption.
 
-## Resource identity
+## Transaction statuses
 
-Переменная и PATH entry получают стабильный identity:
+Используются domain statuses:
 
 ```text
-environment://user/variable/<sha-token>
-environment://machine/path/<sha-token>
+Planned
+Running
+Succeeded
+SucceededRebootPending
+Partial
+Failed
+Cancelled
+RolledBack
+RollbackFailed
+VerificationFailed
 ```
 
-Identity строится из нормализованных scope/name/path и не содержит само значение переменной.
+`SucceededRebootPending` не означает автоматическую перезагрузку.
 
-## Главные правила
+## Nexus frontend boundary
 
-1. **Сначала план.** Изменение системы без execution plan запрещено.
-2. **Идемпотентность.** Совпадающее состояние создаёт пустой план.
-3. **Checkpoint до изменения.** Rollback data подготавливается заранее.
-4. **Проверка результата.** Успешный API call не считается доказательством.
-5. **Минимальные права.** User и Machine actions разделены.
-6. **Rollback — свойство действия.** Provider указывает поддержку честно.
-7. **Unmanaged остаётся unmanaged.** Неописанные ресурсы не удаляются.
-8. **Нет секретов в логах/history.** Обычная environment-секция не предназначена для секретов.
-9. **Один workflow для UI и CLI.** Safeguards нельзя обойти другим frontend.
-10. **Platform boundary.** Реальный apply Environment Provider выполняется только на Windows.
-11. **UI не является источником истины.** Статус берётся из application/provider result.
+`CyberNexusShell` показывает:
 
-## Следующий архитектурный этап
+- Nexus telemetry;
+- Transaction Matrix;
+- execution graph/risk tables;
+- action trace;
+- Update Uplink;
+- boot/shutdown animations.
 
-Версия `0.6.0-alpha.1` должна вынести логику одного provider workflow в общий Apply Engine:
+Он не создаёт provider actions, backups, SQL или update checksum. Presentation вызывает публичные services и отображает фактические results.
 
-- несколько providers в одной транзакции;
-- risk/confirmation groups;
-- dependency-aware execution;
-- cancellation policy;
-- resume после перезапуска;
-- reboot-pending state;
-- cross-provider rollback;
-- live execution graph в Cyber Control Center.
+Прежний `CyberTerminalShell` сохранён как вложенный `[01] CYBER CONTROL CENTER`.
+
+## Update boundary
+
+`UpdateService`:
+
+- читает только GitHub Releases API;
+- сравнивает SemVer;
+- выбирает runtime ZIP;
+- проверяет SHA-256;
+- безопасно распаковывает staging payload;
+- требует release marker;
+- запускает updater process только в Windows release build.
+
+Source mode не может заменить repository files.
+
+## Storage
+
+SQLite по-прежнему хранит:
+
+```text
+Transactions
+TransactionActions
+ActionBackups
+```
+
+Common Apply workflow записывает provider ID, status, message/timestamps и backup reference. Полный resumable manifest остаётся файловым, поскольку обновляется чаще и должен быть доступен до и независимо от SQLite history commit.
+
+## Архитектурные инварианты
+
+1. **Plan before mutation.**
+2. **All checkpoints before first apply.**
+3. **Verification before success.**
+4. **Policy gates outside providers.**
+5. **Provider identity on every action.**
+6. **Deterministic dependency order.**
+7. **Persist progress after each verified action.**
+8. **Reverse graph rollback.**
+9. **No silent elevation or reboot.**
+10. **UI is never the source of truth.**
+11. **Source checkout is never self-overwritten.**
+12. **Update package must pass SHA-256 and marker checks.**
+
+## Следующий этап
+
+`0.7.0-alpha.1` подключит к common engine новые adapters:
+
+```text
+WinGet Provider
+Windows Optional Features Provider
+WSL prerequisite planner
+package ownership policy
+reboot grouping
+```

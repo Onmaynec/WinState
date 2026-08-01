@@ -4,6 +4,10 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Domain", "src\WinState.Domain\WinState.Domain.csproj", "{AD280F97-4D51-4FC3-AF99-DC2AC5013346}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Apply", "src\WinState.Apply\WinState.Apply.csproj", "{9B5191A4-5FC2-4F93-A4F5-57B2F1C3486E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Update", "src\WinState.Update\WinState.Update.csproj", "{D753F793-998C-4B1F-86DE-25F1083A52E4}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Core", "src\WinState.Core\WinState.Core.csproj", "{3411C6D2-9D18-4F0D-B219-8894DBE4942F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Infrastructure", "src\WinState.Infrastructure\WinState.Infrastructure.csproj", "{B1267460-8DBA-4F48-A865-3E9FD795B2E2}"
@@ -26,6 +30,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Storage.Tests", "t
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Providers.Environment.Tests", "tests\WinState.Providers.Environment.Tests\WinState.Providers.Environment.Tests.csproj", "{C65E547E-F65B-4726-B5D1-6CC22CB6DD77}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Apply.Tests", "tests\WinState.Apply.Tests\WinState.Apply.Tests.csproj", "{F23C9C6D-0E85-4F0E-A249-80EA7E3254C7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinState.Update.Tests", "tests\WinState.Update.Tests\WinState.Update.Tests.csproj", "{90A57C37-191B-47D5-A793-10FDC0ADDDC2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,6 +44,14 @@ Global
 		{AD280F97-4D51-4FC3-AF99-DC2AC5013346}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AD280F97-4D51-4FC3-AF99-DC2AC5013346}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AD280F97-4D51-4FC3-AF99-DC2AC5013346}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9B5191A4-5FC2-4F93-A4F5-57B2F1C3486E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B5191A4-5FC2-4F93-A4F5-57B2F1C3486E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B5191A4-5FC2-4F93-A4F5-57B2F1C3486E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B5191A4-5FC2-4F93-A4F5-57B2F1C3486E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D753F793-998C-4B1F-86DE-25F1083A52E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D753F793-998C-4B1F-86DE-25F1083A52E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D753F793-998C-4B1F-86DE-25F1083A52E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D753F793-998C-4B1F-86DE-25F1083A52E4}.Release|Any CPU.Build.0 = Release|Any CPU
 		{3411C6D2-9D18-4F0D-B219-8894DBE4942F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{3411C6D2-9D18-4F0D-B219-8894DBE4942F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3411C6D2-9D18-4F0D-B219-8894DBE4942F}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -80,5 +96,13 @@ Global
 		{C65E547E-F65B-4726-B5D1-6CC22CB6DD77}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C65E547E-F65B-4726-B5D1-6CC22CB6DD77}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C65E547E-F65B-4726-B5D1-6CC22CB6DD77}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F23C9C6D-0E85-4F0E-A249-80EA7E3254C7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F23C9C6D-0E85-4F0E-A249-80EA7E3254C7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F23C9C6D-0E85-4F0E-A249-80EA7E3254C7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F23C9C6D-0E85-4F0E-A249-80EA7E3254C7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{90A57C37-191B-47D5-A793-10FDC0ADDDC2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{90A57C37-191B-47D5-A793-10FDC0ADDDC2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{90A57C37-191B-47D5-A793-10FDC0ADDDC2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{90A57C37-191B-47D5-A793-10FDC0ADDDC2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

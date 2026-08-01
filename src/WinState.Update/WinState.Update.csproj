@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Проверка GitHub Releases, загрузка, SHA-256 verification и безопасная установка обновлений WinState.</Description>
+  </PropertyGroup>
+</Project>

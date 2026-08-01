@@ -1,11 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\WinState.App\WinState.App.csproj" />
+    <ProjectReference Include="..\WinState.Apply\WinState.Apply.csproj" />
+    <ProjectReference Include="..\WinState.Update\WinState.Update.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Spectre.Console" />
   </ItemGroup>
   <PropertyGroup>
-    <Description>Интерактивная консольная панель WinState.</Description>
+    <Description>Интерактивная cyber-панель WinState.</Description>
   </PropertyGroup>
 </Project>
