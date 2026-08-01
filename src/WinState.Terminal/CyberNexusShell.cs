@@ -8,17 +8,15 @@ using WinState.Update;
 
 namespace WinState.Terminal;
 
-/// <summary>
-/// Верхний cyber-shell WinState 0.6: Control Center, Transaction Matrix и Update Uplink.
-/// </summary>
+/// <summary>Верхний cyber-shell: Control Center, Apply Engine и Update Uplink.</summary>
 public sealed class CyberNexusShell
 {
-    private static readonly IReadOnlyList<NexusChannel> Channels =
+    private static readonly IReadOnlyList<MenuItem> MainMenu =
     [
-        new("control", "[01] CYBER CONTROL CENTER", "Основные operation channels WinState"),
-        new("transactions", "[02] TRANSACTION MATRIX", "Unified Apply Engine, resume и rollback"),
-        new("updates", "[03] UPDATE UPLINK", "GitHub Releases, SHA-256 и self-update"),
-        new("exit", "[00] DISCONNECT", "Завершить защищённую сессию")
+        new("control", "[01] CYBER CONTROL CENTER", "основные operation channels"),
+        new("matrix", "[02] TRANSACTION MATRIX", "execution graph, resume и rollback"),
+        new("updates", "[03] UPDATE UPLINK", "GitHub Releases и SHA-256 gate"),
+        new("exit", "[00] DISCONNECT", "закрыть защищённую сессию")
     ];
 
     private readonly WinStateApplication _application;
@@ -33,15 +31,14 @@ public sealed class CyberNexusShell
     public async Task<int> RunAsync(bool demoMode, CancellationToken cancellationToken)
     {
         Console.Title = $"WinState Nexus {WinStateApplication.Version}";
-        if (demoMode)
-        {
-            await RenderDemoAsync(cancellationToken);
-            _updates.Dispose();
-            return 0;
-        }
-
         try
         {
+            if (demoMode)
+            {
+                await RenderDemoAsync(cancellationToken);
+                return 0;
+            }
+
             await BootAsync(cancellationToken);
             if (await AutomaticUpdateHandshakeAsync(cancellationToken))
             {
@@ -50,24 +47,16 @@ public sealed class CyberNexusShell
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                RenderNexusHeader("NEXUS CONTROL FABRIC");
-                RenderNexusTelemetry();
-                var selected = AnsiConsole.Prompt(
-                    new SelectionPrompt<NexusChannel>()
-                        .Title("[bold green]SELECT SECURE CHANNEL[/]")
-                        .PageSize(Channels.Count)
-                        .HighlightStyle(new Style(Color.Black, Color.Green1))
-                        .UseConverter(channel =>
-                            $"{channel.Title} [grey]// {channel.Description}[/]")
-                        .AddChoices(Channels));
-
-                switch (selected.Id)
+                RenderHeader("NEXUS CONTROL FABRIC");
+                RenderNexusStatus();
+                var item = Select("SELECT SECURE CHANNEL", MainMenu);
+                switch (item.Id)
                 {
                     case "control":
                         await new CyberTerminalShell(_application)
                             .RunAsync(false, cancellationToken);
                         break;
-                    case "transactions":
+                    case "matrix":
                         await ShowTransactionMatrixAsync(cancellationToken);
                         break;
                     case "updates":
@@ -109,17 +98,17 @@ public sealed class CyberNexusShell
                 new TaskDescriptionColumn(),
                 new ProgressBarColumn(),
                 new PercentageColumn(),
-                new SpinnerColumn(Spinner.Known.Binary))
+                new SpinnerColumn(Spinner.Known.Dots))
             .StartAsync(async context =>
             {
-                var task = context.AddTask("[green]NEXUS BOOT[/]", maxValue: stages.Length * 10);
+                var task = context.AddTask("[green]NEXUS BOOT[/]", maxValue: stages.Length * 8);
                 foreach (var stage in stages)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
                     task.Description = $"[green]{Markup.Escape(stage)}[/]";
-                    for (var tick = 0; tick < 10; tick++)
+                    for (var index = 0; index < 8; index++)
                     {
-                        await Task.Delay(20, cancellationToken);
+                        cancellationToken.ThrowIfCancellationRequested();
+                        await Task.Delay(18, cancellationToken);
                         task.Increment(1);
                     }
                 }
@@ -127,8 +116,7 @@ public sealed class CyberNexusShell
         await _application.InitializeStorageAsync(cancellationToken);
     }
 
-    private async Task<bool> AutomaticUpdateHandshakeAsync(
-        CancellationToken cancellationToken)
+    private async Task<bool> AutomaticUpdateHandshakeAsync(CancellationToken cancellationToken)
     {
         if (_updates.Settings.Mode == AutomaticUpdateMode.Off
             || !await _updates.ShouldCheckAsync(
@@ -142,24 +130,17 @@ public sealed class CyberNexusShell
         UpdateCheckResult? check = null;
         try
         {
-            await AnsiConsole.Status()
-                .Spinner(Spinner.Known.Binary)
-                .SpinnerStyle(Style.Parse("green"))
-                .StartAsync("[green]UPDATE UPLINK // checking release channel...[/]", async _ =>
-                {
-                    check = await _updates.CheckAsync(
-                        WinStateApplication.Version,
-                        cancellationToken);
-                });
+            await RunAnimatedAsync(
+                "UPDATE UPLINK // checking release channel",
+                async () => check = await _updates.CheckAsync(
+                    WinStateApplication.Version,
+                    cancellationToken));
         }
-        catch (Exception exception) when (exception is HttpRequestException
-            or TaskCanceledException
-            or InvalidDataException
-            or FormatException)
+        catch (Exception exception) when (IsUpdateException(exception))
         {
             AnsiConsole.MarkupLine(
                 $"[grey]UPDATE UPLINK OFFLINE // {Markup.Escape(exception.Message)}[/]");
-            await Task.Delay(350, cancellationToken);
+            await Task.Delay(250, cancellationToken);
             return false;
         }
 
@@ -177,66 +158,58 @@ public sealed class CyberNexusShell
             return false;
         }
 
-        RenderUpdateAvailable(check);
+        RenderHeader("UPDATE AVAILABLE");
+        RenderUpdate(check);
         if (_updates.Settings.Mode == AutomaticUpdateMode.Check)
         {
             WaitForReturn();
             return false;
         }
 
-        var install = _updates.Settings.Mode == AutomaticUpdateMode.Install
-            || AnsiConsole.Confirm(
-                "[bold green]DOWNLOAD, VERIFY AND INSTALL NOW?[/]",
-                false);
-        if (!install)
-        {
-            return false;
-        }
-
-        return await DownloadAndScheduleAsync(check.Release, cancellationToken);
+        var approved = _updates.Settings.Mode == AutomaticUpdateMode.Install
+            || AnsiConsole.Confirm("[bold green]DOWNLOAD, VERIFY AND INSTALL?[/]", false);
+        return approved
+            && await DownloadAndScheduleAsync(check.Release, cancellationToken);
     }
 
     private async Task ShowTransactionMatrixAsync(CancellationToken cancellationToken)
     {
         while (true)
         {
-            RenderNexusHeader("TRANSACTION MATRIX");
+            RenderHeader("TRANSACTION MATRIX");
             UnifiedApplyStatusReport? status = null;
-            await RunStatusAsync(
+            await RunAnimatedAsync(
                 "index transaction manifests",
                 async () => status = await _application.GetUnifiedApplyStatusAsync(cancellationToken));
             if (status is null)
             {
-                ShowFailure("Apply Engine status не получен.");
+                ShowError("Apply Engine status не получен.");
                 return;
             }
 
-            RenderTransactionStatus(status);
-            var operation = AnsiConsole.Prompt(
-                new SelectionPrompt<NexusChannel>()
-                    .Title("[bold green]SELECT MATRIX OPERATION[/]")
-                    .HighlightStyle(new Style(Color.Black, Color.Green1))
-                    .UseConverter(item => $"{item.Title} [grey]// {item.Description}[/]")
-                    .AddChoices(
-                        new NexusChannel("plan", "[11] BUILD EXECUTION GRAPH", "План из YAML без изменений"),
-                        new NexusChannel("apply", "[12] EXECUTE VERIFIED GRAPH", "Checkpoint, apply, verify, rollback"),
-                        new NexusChannel("resume", "[13] RESUME INTERRUPTED", "Продолжить незавершённую транзакцию"),
-                        new NexusChannel("rollback", "[14] CROSS-PROVIDER ROLLBACK", "Откатить успешные actions в обратном порядке"),
-                        new NexusChannel("back", "[00] RETURN", "Вернуться в Nexus")));
-
+            RenderMatrixStatus(status);
+            var operation = Select(
+                "SELECT MATRIX OPERATION",
+                [
+                    new("plan", "[11] BUILD EXECUTION GRAPH", "построить plan без изменений"),
+                    new("apply", "[12] EXECUTE VERIFIED GRAPH", "checkpoint, apply и verify"),
+                    new("resume", "[13] RESUME INTERRUPTED", "продолжить persisted transaction"),
+                    new("rollback", "[14] CROSS-PROVIDER ROLLBACK", "восстановить checkpoints"),
+                    new("back", "[00] RETURN", "вернуться в Nexus")
+                ]);
             switch (operation.Id)
             {
                 case "plan":
-                    await PlanUnifiedAsync(false, cancellationToken);
+                    await BuildGraphAsync(false, cancellationToken);
                     break;
                 case "apply":
-                    await PlanUnifiedAsync(true, cancellationToken);
+                    await BuildGraphAsync(true, cancellationToken);
                     break;
                 case "resume":
-                    await ResumeUnifiedAsync(status, cancellationToken);
+                    await ResumeAsync(status, cancellationToken);
                     break;
                 case "rollback":
-                    await RollbackUnifiedAsync(status, cancellationToken);
+                    await RollbackAsync(status, cancellationToken);
                     break;
                 case "back":
                     return;
@@ -244,9 +217,7 @@ public sealed class CyberNexusShell
         }
     }
 
-    private async Task PlanUnifiedAsync(
-        bool allowExecution,
-        CancellationToken cancellationToken)
+    private async Task BuildGraphAsync(bool execute, CancellationToken cancellationToken)
     {
         var profile = SelectProfile();
         if (profile is null)
@@ -256,7 +227,7 @@ public sealed class CyberNexusShell
 
         UnifiedApplyPlanReport? report = null;
         Exception? failure = null;
-        await RunStatusAsync(
+        await RunAnimatedAsync(
             "discover → diff → merge provider graphs → risk groups",
             async () =>
             {
@@ -267,24 +238,21 @@ public sealed class CyberNexusShell
                         null,
                         cancellationToken);
                 }
-                catch (Exception exception) when (exception is IOException
-                    or UnauthorizedAccessException
-                    or InvalidDataException
-                    or PlatformNotSupportedException)
+                catch (Exception exception) when (IsWorkflowException(exception))
                 {
                     failure = exception;
                 }
             });
 
-        RenderNexusHeader("UNIFIED EXECUTION GRAPH");
+        RenderHeader("UNIFIED EXECUTION GRAPH");
         if (failure is not null || report is null)
         {
-            ShowFailure(failure?.Message ?? "Execution graph не создан.");
+            ShowError(failure?.Message ?? "Execution graph не создан.");
             return;
         }
 
-        RenderUnifiedPlan(report);
-        if (!allowExecution
+        RenderPlan(report);
+        if (!execute
             || !report.Validation.IsValid
             || !report.IsSupported
             || report.Plan.OrderedActions.Count == 0)
@@ -294,32 +262,19 @@ public sealed class CyberNexusShell
         }
 
         if (!AnsiConsole.Confirm(
-            "[bold yellow]EXECUTE THIS GRAPH WITH CHECKPOINTS AND VERIFICATION?[/]",
+            "[bold yellow]EXECUTE GRAPH WITH CHECKPOINTS AND VERIFICATION?[/]",
             false))
         {
             return;
         }
 
-        var options = new ApplyEngineOptions
-        {
-            AutomaticRollback = true,
-            AllowAdministrator = !report.Plan.RequiresAdministrator
-                || AnsiConsole.Confirm(
-                    "[bold red]ELEVATED ACTIONS DETECTED. AUTHORIZE ADMIN GROUP?[/]",
-                    false),
-            AllowCritical = report.Plan.MaximumRisk < RiskLevel.Critical
-                || AnsiConsole.Confirm(
-                    "[bold red]CRITICAL RISK GROUP DETECTED. AUTHORIZE?[/]",
-                    false),
-            AllowIrreversible = !report.Plan.ContainsIrreversible
-                || AnsiConsole.Confirm(
-                    "[bold red]IRREVERSIBLE ACTIONS DETECTED. AUTHORIZE?[/]",
-                    false),
-            AllowReboot = false
-        };
-        if (report.Plan.RequiresAdministrator && !options.AllowAdministrator
-            || report.Plan.MaximumRisk >= RiskLevel.Critical && !options.AllowCritical
-            || report.Plan.ContainsIrreversible && !options.AllowIrreversible)
+        var allowAdministrator = !report.Plan.RequiresAdministrator
+            || AnsiConsole.Confirm("[bold red]AUTHORIZE ELEVATED ACTION GROUP?[/]", false);
+        var allowCritical = report.Plan.MaximumRisk < RiskLevel.Critical
+            || AnsiConsole.Confirm("[bold red]AUTHORIZE CRITICAL RISK GROUP?[/]", false);
+        var allowIrreversible = !report.Plan.ContainsIrreversible
+            || AnsiConsole.Confirm("[bold red]AUTHORIZE ACTIONS WITHOUT ROLLBACK?[/]", false);
+        if (!allowAdministrator || !allowCritical || !allowIrreversible)
         {
             AnsiConsole.MarkupLine("[yellow]AUTHORIZATION DENIED // graph not executed.[/]");
             WaitForReturn();
@@ -328,8 +283,8 @@ public sealed class CyberNexusShell
 
         ApplyEngineReport? execution = null;
         failure = null;
-        await RunStatusAsync(
-            "prepare all checkpoints → execute graph → verify → seal manifest",
+        await RunAnimatedAsync(
+            "prepare checkpoints → execute graph → verify → seal manifest",
             async () =>
             {
                 try
@@ -337,32 +292,35 @@ public sealed class CyberNexusShell
                     execution = await _application.ApplyUnifiedAsync(
                         profile,
                         null,
-                        options,
-                        options.AllowAdministrator,
+                        new ApplyEngineOptions
+                        {
+                            AutomaticRollback = true,
+                            AllowAdministrator = allowAdministrator,
+                            AllowCritical = allowCritical,
+                            AllowIrreversible = allowIrreversible,
+                            AllowReboot = false
+                        },
+                        allowAdministrator,
                         cancellationToken);
                 }
-                catch (Exception exception) when (exception is IOException
-                    or UnauthorizedAccessException
-                    or InvalidDataException
-                    or InvalidOperationException
-                    or PlatformNotSupportedException)
+                catch (Exception exception) when (IsWorkflowException(exception))
                 {
                     failure = exception;
                 }
             });
 
-        RenderNexusHeader("TRANSACTION TRACE");
+        RenderHeader("TRANSACTION TRACE");
         if (failure is not null || execution is null)
         {
-            ShowFailure(failure?.Message ?? "Apply Engine не вернул результат.");
+            ShowError(failure?.Message ?? "Apply Engine не вернул результат.");
             return;
         }
 
-        RenderApplyReport(execution);
+        RenderReport(execution);
         WaitForReturn();
     }
 
-    private async Task ResumeUnifiedAsync(
+    private async Task ResumeAsync(
         UnifiedApplyStatusReport status,
         CancellationToken cancellationToken)
     {
@@ -374,38 +332,35 @@ public sealed class CyberNexusShell
             return;
         }
 
-        var path = ManifestPath(transaction.TransactionId);
         ApplyEngineReport? report = null;
         Exception? failure = null;
-        await RunStatusAsync(
-            "load persisted graph → skip verified actions → resume",
+        await RunAnimatedAsync(
+            "load manifest → skip verified actions → resume graph",
             async () =>
             {
                 try
                 {
-                    report = await _application.ResumeUnifiedApplyAsync(path, cancellationToken);
+                    report = await _application.ResumeUnifiedApplyAsync(
+                        ManifestPath(transaction.TransactionId),
+                        cancellationToken);
                 }
-                catch (Exception exception) when (exception is IOException
-                    or UnauthorizedAccessException
-                    or InvalidDataException
-                    or InvalidOperationException
-                    or PlatformNotSupportedException)
+                catch (Exception exception) when (IsWorkflowException(exception))
                 {
                     failure = exception;
                 }
             });
-        RenderNexusHeader("RESUME TRACE");
+        RenderHeader("RESUME TRACE");
         if (failure is not null || report is null)
         {
-            ShowFailure(failure?.Message ?? "Resume не вернул результат.");
+            ShowError(failure?.Message ?? "Resume не вернул результат.");
             return;
         }
 
-        RenderApplyReport(report);
+        RenderReport(report);
         WaitForReturn();
     }
 
-    private async Task RollbackUnifiedAsync(
+    private async Task RollbackAsync(
         UnifiedApplyStatusReport status,
         CancellationToken cancellationToken)
     {
@@ -423,8 +378,8 @@ public sealed class CyberNexusShell
 
         ApplyEngineReport? report = null;
         Exception? failure = null;
-        await RunStatusAsync(
-            "reverse graph → restore provider checkpoints → verify history",
+        await RunAnimatedAsync(
+            "reverse graph → restore checkpoints → seal rollback",
             async () =>
             {
                 try
@@ -433,109 +388,82 @@ public sealed class CyberNexusShell
                         ManifestPath(transaction.TransactionId),
                         cancellationToken);
                 }
-                catch (Exception exception) when (exception is IOException
-                    or UnauthorizedAccessException
-                    or InvalidDataException
-                    or InvalidOperationException
-                    or PlatformNotSupportedException)
+                catch (Exception exception) when (IsWorkflowException(exception))
                 {
                     failure = exception;
                 }
             });
-        RenderNexusHeader("ROLLBACK TRACE");
+        RenderHeader("ROLLBACK TRACE");
         if (failure is not null || report is null)
         {
-            ShowFailure(failure?.Message ?? "Rollback не вернул результат.");
+            ShowError(failure?.Message ?? "Rollback не вернул результат.");
             return;
         }
 
-        RenderApplyReport(report);
+        RenderReport(report);
         WaitForReturn();
     }
 
     private async Task<bool> ShowUpdateUplinkAsync(CancellationToken cancellationToken)
     {
-        while (true)
+        RenderHeader("UPDATE UPLINK");
+        RenderUpdateSettings();
+        var operation = Select(
+            "SELECT UPLINK OPERATION",
+            [
+                new("check", "[21] CHECK RELEASE CHANNEL", "semantic version check"),
+                new("back", "[00] RETURN", "вернуться в Nexus")
+            ]);
+        if (operation.Id == "back")
         {
-            RenderNexusHeader("UPDATE UPLINK");
-            var settings = _updates.Settings;
-            var table = new Table()
-                .Border(TableBorder.Rounded)
-                .BorderStyle(new Style(Color.Green))
-                .AddColumn("LINK")
-                .AddColumn("VALUE");
-            table.AddRow("Repository", Markup.Escape(settings.Repository));
-            table.AddRow("Channel", settings.Channel.ToString());
-            table.AddRow("Mode", settings.Mode.ToString());
-            table.AddRow("Runtime", Markup.Escape(settings.RuntimeIdentifier));
-            table.AddRow("Current", WinStateApplication.Version);
-            table.AddRow("Self install", _updates.CanSelfInstall ? "[green]ARMED[/]" : "[yellow]SOURCE MODE[/]");
-            AnsiConsole.Write(table);
-
-            var operation = AnsiConsole.Prompt(
-                new SelectionPrompt<NexusChannel>()
-                    .Title("[bold green]SELECT UPLINK OPERATION[/]")
-                    .HighlightStyle(new Style(Color.Black, Color.Green1))
-                    .UseConverter(item => $"{item.Title} [grey]// {item.Description}[/]")
-                    .AddChoices(
-                        new NexusChannel("check", "[21] CHECK RELEASE CHANNEL", "Проверить актуальную версию"),
-                        new NexusChannel("back", "[00] RETURN", "Вернуться в Nexus")));
-            if (operation.Id == "back")
-            {
-                return false;
-            }
-
-            UpdateCheckResult? check = null;
-            Exception? failure = null;
-            await RunStatusAsync(
-                "TLS handshake → GitHub Releases → semantic version compare",
-                async () =>
-                {
-                    try
-                    {
-                        check = await _updates.CheckAsync(
-                            WinStateApplication.Version,
-                            cancellationToken);
-                    }
-                    catch (Exception exception) when (exception is HttpRequestException
-                        or TaskCanceledException
-                        or InvalidDataException
-                        or FormatException)
-                    {
-                        failure = exception;
-                    }
-                });
-            RenderNexusHeader("UPDATE UPLINK RESULT");
-            if (failure is not null || check is null)
-            {
-                ShowFailure(failure?.Message ?? "Release channel не ответил.");
-                return false;
-            }
-
-            await _updates.SaveLedgerAsync(
-                _application.Options.HomeDirectory,
-                check,
-                cancellationToken);
-            if (!check.IsUpdateAvailable || check.Release is null)
-            {
-                AnsiConsole.Write(new Panel($"[green]{Markup.Escape(check.Message)}[/]")
-                    .Header(new PanelHeader(" CHANNEL CURRENT "))
-                    .Border(BoxBorder.Double)
-                    .BorderStyle(new Style(Color.Green)));
-                WaitForReturn();
-                return false;
-            }
-
-            RenderUpdateAvailable(check);
-            if (!AnsiConsole.Confirm(
-                "[bold green]DOWNLOAD AND VERIFY RELEASE PACKAGE?[/]",
-                false))
-            {
-                return false;
-            }
-
-            return await DownloadAndScheduleAsync(check.Release, cancellationToken);
+            return false;
         }
+
+        UpdateCheckResult? check = null;
+        Exception? failure = null;
+        await RunAnimatedAsync(
+            "TLS handshake → GitHub Releases → compare versions",
+            async () =>
+            {
+                try
+                {
+                    check = await _updates.CheckAsync(
+                        WinStateApplication.Version,
+                        cancellationToken);
+                }
+                catch (Exception exception) when (IsUpdateException(exception))
+                {
+                    failure = exception;
+                }
+            });
+        RenderHeader("UPDATE UPLINK RESULT");
+        if (failure is not null || check is null)
+        {
+            ShowError(failure?.Message ?? "Release channel не ответил.");
+            return false;
+        }
+
+        await _updates.SaveLedgerAsync(
+            _application.Options.HomeDirectory,
+            check,
+            cancellationToken);
+        if (!check.IsUpdateAvailable || check.Release is null)
+        {
+            AnsiConsole.Write(new Panel($"[green]{Markup.Escape(check.Message)}[/]")
+                .Header(new PanelHeader(" CHANNEL CURRENT "))
+                .Border(BoxBorder.Double)
+                .BorderStyle(new Style(Color.Green)));
+            WaitForReturn();
+            return false;
+        }
+
+        RenderUpdate(check);
+        if (!AnsiConsole.Confirm("[bold green]DOWNLOAD AND VERIFY PACKAGE?[/]", false))
+        {
+            return false;
+        }
+
+        return await DownloadAndScheduleAsync(check.Release, cancellationToken);
     }
 
     private async Task<bool> DownloadAndScheduleAsync(
@@ -544,8 +472,8 @@ public sealed class CyberNexusShell
     {
         UpdateDownloadResult? download = null;
         Exception? failure = null;
-        await RunStatusAsync(
-            "download package → verify SHA-256 → safe extract",
+        await RunAnimatedAsync(
+            "download ZIP → verify SHA-256 → safe extract",
             async () =>
             {
                 try
@@ -555,78 +483,71 @@ public sealed class CyberNexusShell
                         null,
                         cancellationToken);
                 }
-                catch (Exception exception) when (exception is HttpRequestException
-                    or TaskCanceledException
-                    or IOException
+                catch (Exception exception) when (IsUpdateException(exception)
+                    || exception is IOException
                     or UnauthorizedAccessException
-                    or InvalidDataException
                     or PlatformNotSupportedException)
                 {
                     failure = exception;
                 }
             });
 
-        RenderNexusHeader("UPDATE PACKAGE VERIFIED");
+        RenderHeader("VERIFIED RELEASE PACKAGE");
         if (failure is not null || download is null)
         {
-            ShowFailure(failure?.Message ?? "Release package не подготовлен.");
+            ShowError(failure?.Message ?? "Release package не подготовлен.");
             return false;
         }
 
-        var panel = new Panel(
+        AnsiConsole.Write(new Panel(
                 $"[green]VERSION[/]  {Markup.Escape(download.Release.Version.ToString())}\n" +
                 $"[green]SHA-256[/]  {Markup.Escape(download.Sha256)}\n" +
                 $"[green]BYTES[/]    {download.BytesDownloaded}\n" +
                 $"[green]STAGING[/]  {Markup.Escape(download.PayloadDirectory)}")
-            .Header(new PanelHeader(" VERIFIED RELEASE "))
+            .Header(new PanelHeader(" SHA-256 PASS "))
             .Border(BoxBorder.Double)
-            .BorderStyle(new Style(Color.Green));
-        AnsiConsole.Write(panel);
+            .BorderStyle(new Style(Color.Green)));
 
         var install = await _updates.ScheduleInstallAsync(download, cancellationToken);
         if (!install.Scheduled)
         {
             AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(install.Message)}[/]");
-            AnsiConsole.MarkupLine("[grey]Source checkout update: git pull[/]");
+            AnsiConsole.MarkupLine("[grey]Source checkout update command: git pull[/]");
             WaitForReturn();
             return false;
         }
 
         AnsiConsole.MarkupLine($"[bold green]{Markup.Escape(install.Message)}[/]");
-        AnsiConsole.MarkupLine("[grey]Current process will exit; verified updater will replace files and restart WinState.[/]");
-        await Task.Delay(900, cancellationToken);
+        AnsiConsole.MarkupLine(
+            "[grey]WinState завершится; updater заменит release files и перезапустит программу.[/]");
+        await Task.Delay(700, cancellationToken);
         return install.RequiresExit;
     }
 
     private async Task RenderDemoAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        RenderNexusHeader("NEXUS CONTROL FABRIC // DEMO");
-        var grid = new Grid();
-        grid.AddColumn();
-        grid.AddColumn();
-        grid.AddRow(
-            BuildDemoPanel(
-                "TRANSACTION MATRIX",
-                "[green]● ONLINE[/]\nexecution graph: READY\nresume ledger: ARMED\ncross-provider rollback: ARMED"),
-            BuildDemoPanel(
-                "UPDATE UPLINK",
-                "[green]● ONLINE[/]\nchannel: prerelease\nSHA-256 gate: ARMED\nself-update: RELEASE ONLY"));
-        grid.AddRow(
-            BuildDemoPanel(
-                "PROVIDER FABRIC",
-                "environment: REGISTERED\nfuture adapters: HOT-PLUG\nrisk groups: ENFORCED"),
-            BuildDemoPanel(
-                "SAFETY POSTURE",
-                "checkpoint before mutation\nverify before success\nautomatic rollback\nno silent elevation"));
-        AnsiConsole.Write(grid);
+        RenderHeader("NEXUS CONTROL FABRIC // DEMO");
+        var table = new Table()
+            .Border(TableBorder.Heavy)
+            .BorderStyle(new Style(Color.Green))
+            .Expand()
+            .AddColumn("CHANNEL")
+            .AddColumn("STATE")
+            .AddColumn("CAPABILITY");
+        table.AddRow("TRANSACTION MATRIX", "[green]ONLINE[/]", "graph / resume / rollback");
+        table.AddRow("UPDATE UPLINK", "[green]ONLINE[/]", "releases / SHA-256 / self-update");
+        table.AddRow("PROVIDER FABRIC", "[green]REGISTERED[/]", "environment adapter");
+        table.AddRow("SAFETY POSTURE", "[green]ARMED[/]", "checkpoint / verify / auto rollback");
+        AnsiConsole.Write(table);
         AnsiConsole.MarkupLine(
-            "\n[green]CYBER NEXUS READY[/] [grey]// demo mode performs no network or system changes[/]");
+            "\n[green]NEXUS CONTROL FABRIC READY[/] [grey]// demo performs no network or system changes[/]");
         await Task.CompletedTask;
     }
 
-    private void RenderNexusTelemetry()
+    private void RenderNexusStatus()
     {
+        var providers = _application.RegisteredApplyProviders;
         var table = new Table()
             .Border(TableBorder.Heavy)
             .BorderStyle(new Style(Color.Green))
@@ -634,11 +555,11 @@ public sealed class CyberNexusShell
             .AddColumn("NODE")
             .AddColumn("STATE")
             .AddColumn("SECURITY");
-        table.AddRow("Apply Engine", "[green]ONLINE[/]", "graph + resume + rollback");
+        table.AddRow("Apply Engine", "[green]ONLINE[/]", "persisted execution graph");
         table.AddRow(
             "Provider Fabric",
-            $"[green]{_application.RegisteredApplyProviders.Count} REGISTERED[/]",
-            string.Join(", ", _application.RegisteredApplyProviders.Select(Markup.Escape)));
+            $"[green]{providers.Count} REGISTERED[/]",
+            Markup.Escape(string.Join(", ", providers)));
         table.AddRow(
             "Update Uplink",
             _updates.Settings.Mode == AutomaticUpdateMode.Off
@@ -649,19 +570,19 @@ public sealed class CyberNexusShell
         AnsiConsole.Write(table);
     }
 
-    private static void RenderTransactionStatus(UnifiedApplyStatusReport status)
+    private static void RenderMatrixStatus(UnifiedApplyStatusReport status)
     {
-        var table = new Table()
+        var summary = new Table()
             .Border(TableBorder.Rounded)
             .BorderStyle(new Style(Color.Green))
             .AddColumn("METRIC")
             .AddColumn("VALUE");
-        table.AddRow("Registered providers", status.RegisteredProviders.Count.ToString());
-        table.AddRow("Provider IDs", Markup.Escape(string.Join(", ", status.RegisteredProviders)));
-        table.AddRow("Transactions", status.Transactions.ToString());
-        table.AddRow("Resumable", status.ResumableTransactions.ToString());
-        table.AddRow("Reboot pending", status.RebootPendingTransactions.ToString());
-        AnsiConsole.Write(table);
+        summary.AddRow("Registered providers", status.RegisteredProviders.Count.ToString());
+        summary.AddRow("Provider IDs", Markup.Escape(string.Join(", ", status.RegisteredProviders)));
+        summary.AddRow("Transactions", status.Transactions.ToString());
+        summary.AddRow("Resumable", status.ResumableTransactions.ToString());
+        summary.AddRow("Reboot pending", status.RebootPendingTransactions.ToString());
+        AnsiConsole.Write(summary);
 
         if (status.RecentTransactions.Count == 0)
         {
@@ -674,19 +595,18 @@ public sealed class CyberNexusShell
             .AddColumn("TRANSACTION")
             .AddColumn("STATUS")
             .AddColumn("ACTIONS");
-        foreach (var transaction in status.RecentTransactions.Take(8))
+        foreach (var item in status.RecentTransactions.Take(8))
         {
             history.AddRow(
-                transaction.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
-                Markup.Escape(transaction.TransactionId),
-                StatusMarkup(transaction.Status),
-                transaction.Plan.Count.ToString());
+                item.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
+                Markup.Escape(item.TransactionId),
+                TransactionStatusMarkup(item.Status),
+                item.Plan.Count.ToString());
         }
-
         AnsiConsole.Write(history);
     }
 
-    private static void RenderUnifiedPlan(UnifiedApplyPlanReport report)
+    private static void RenderPlan(UnifiedApplyPlanReport report)
     {
         var summary = new Table()
             .Border(TableBorder.Heavy)
@@ -699,7 +619,7 @@ public sealed class CyberNexusShell
         summary.AddRow("Maximum risk", RiskMarkup(report.Plan.MaximumRisk));
         summary.AddRow("Elevated", report.Plan.RequiresAdministrator ? "[red]YES[/]" : "[green]NO[/]");
         summary.AddRow("Reboot possible", report.Plan.RequiresReboot ? "[yellow]YES[/]" : "NO");
-        summary.AddRow("Irreversible", report.Plan.ContainsIrreversible ? "[red]YES[/]" : "[green]NO[/]");
+        summary.AddRow("No rollback", report.Plan.ContainsIrreversible ? "[red]YES[/]" : "[green]NO[/]");
         summary.AddRow("Validation", report.Validation.IsValid ? "[green]PASS[/]" : "[red]FAIL[/]");
         AnsiConsole.Write(summary);
 
@@ -713,23 +633,23 @@ public sealed class CyberNexusShell
             return;
         }
 
-        var risk = new Table()
+        var risks = new Table()
             .Border(TableBorder.SimpleHeavy)
-            .AddColumn("RISK GROUP")
+            .AddColumn("RISK")
             .AddColumn("ACTIONS")
             .AddColumn("ADMIN")
             .AddColumn("NO ROLLBACK")
             .AddColumn("REBOOT");
         foreach (var group in report.Plan.RiskGroups)
         {
-            risk.AddRow(
+            risks.AddRow(
                 RiskMarkup(group.Risk),
                 group.Actions.ToString(),
                 group.AdministratorActions.ToString(),
                 group.IrreversibleActions.ToString(),
                 group.RebootActions.ToString());
         }
-        AnsiConsole.Write(risk);
+        AnsiConsole.Write(risks);
 
         var actions = new Table()
             .Border(TableBorder.Rounded)
@@ -739,7 +659,7 @@ public sealed class CyberNexusShell
             .AddColumn("OP")
             .AddColumn("RISK")
             .AddColumn("RESOURCE")
-            .AddColumn("DEPENDENCIES");
+            .AddColumn("DEPENDS");
         var index = 1;
         foreach (var action in report.Plan.OrderedActions)
         {
@@ -754,28 +674,27 @@ public sealed class CyberNexusShell
                     : string.Join(",", action.DependsOn)));
         }
         AnsiConsole.Write(actions);
-
         if (report.Plan.OrderedActions.Count == 0)
         {
             AnsiConsole.MarkupLine("[green]NO DRIFT // execution graph is empty.[/]");
         }
     }
 
-    private static void RenderApplyReport(ApplyEngineReport report)
+    private static void RenderReport(ApplyEngineReport report)
     {
-        var table = new Table()
+        var summary = new Table()
             .Border(TableBorder.Double)
             .BorderStyle(new Style(report.Succeeded ? Color.Green : Color.Red))
             .AddColumn("FIELD")
             .AddColumn("VALUE");
-        table.AddRow("Transaction", Markup.Escape(report.TransactionId));
-        table.AddRow("Profile", Markup.Escape(report.ProfileId));
-        table.AddRow("Status", StatusMarkup(report.Status));
-        table.AddRow("Verified", report.Verified ? "[green]YES[/]" : "[red]NO[/]");
-        table.AddRow("Rolled back", report.RolledBack ? "[yellow]YES[/]" : "NO");
-        table.AddRow("Reboot required", report.RebootRequired ? "[yellow]YES[/]" : "NO");
-        table.AddRow("Manifest", Markup.Escape(report.ManifestPath));
-        AnsiConsole.Write(table);
+        summary.AddRow("Transaction", Markup.Escape(report.TransactionId));
+        summary.AddRow("Profile", Markup.Escape(report.ProfileId));
+        summary.AddRow("Status", TransactionStatusMarkup(report.Status));
+        summary.AddRow("Verified", report.Verified ? "[green]YES[/]" : "[red]NO[/]");
+        summary.AddRow("Rolled back", report.RolledBack ? "[yellow]YES[/]" : "NO");
+        summary.AddRow("Reboot required", report.RebootRequired ? "[yellow]YES[/]" : "NO");
+        summary.AddRow("Manifest", Markup.Escape(report.ManifestPath));
+        AnsiConsole.Write(summary);
 
         var trace = new Table()
             .Border(TableBorder.SimpleHeavy)
@@ -797,13 +716,30 @@ public sealed class CyberNexusShell
         AnsiConsole.MarkupLine($"\n[bold]{Markup.Escape(report.Message)}[/]");
     }
 
-    private static void RenderUpdateAvailable(UpdateCheckResult check)
+    private void RenderUpdateSettings()
+    {
+        var settings = _updates.Settings;
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .BorderStyle(new Style(Color.Green))
+            .AddColumn("LINK")
+            .AddColumn("VALUE");
+        table.AddRow("Repository", Markup.Escape(settings.Repository));
+        table.AddRow("Channel", settings.Channel.ToString());
+        table.AddRow("Mode", settings.Mode.ToString());
+        table.AddRow("Runtime", Markup.Escape(settings.RuntimeIdentifier));
+        table.AddRow("Current", WinStateApplication.Version);
+        table.AddRow("Self install", _updates.CanSelfInstall ? "[green]ARMED[/]" : "[yellow]SOURCE MODE[/]");
+        AnsiConsole.Write(table);
+    }
+
+    private static void RenderUpdate(UpdateCheckResult check)
     {
         var release = check.Release!;
         AnsiConsole.Write(new Panel(
-                $"[green]CURRENT[/]  {Markup.Escape(check.CurrentVersion)}\n" +
-                $"[bold green]LATEST[/]   {Markup.Escape(release.Version.ToString())}\n" +
-                $"[green]CHANNEL[/]  {(release.IsPrerelease ? "prerelease" : "stable")}\n" +
+                $"[green]CURRENT[/]   {Markup.Escape(check.CurrentVersion)}\n" +
+                $"[bold green]LATEST[/]    {Markup.Escape(release.Version.ToString())}\n" +
+                $"[green]CHANNEL[/]   {(release.IsPrerelease ? "prerelease" : "stable")}\n" +
                 $"[green]PUBLISHED[/] {release.PublishedAt:yyyy-MM-dd HH:mm} UTC\n" +
                 $"[green]ASSETS[/]    {release.Assets.Count}")
             .Header(new PanelHeader(" UPDATE AVAILABLE "))
@@ -816,7 +752,7 @@ public sealed class CyberNexusShell
         var files = DiscoverProfiles();
         if (files.Count == 0)
         {
-            ShowFailure("YAML profiles не найдены в Profile Vault или samples.");
+            ShowError("YAML profiles не найдены в Profile Vault или samples.");
             return null;
         }
 
@@ -832,23 +768,20 @@ public sealed class CyberNexusShell
 
     private IReadOnlyList<string> DiscoverProfiles()
     {
-        var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        var roots = new[]
         {
             _application.Options.ProfilesDirectory,
             Path.Combine(Environment.CurrentDirectory, "samples")
         };
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var root in roots.Where(Directory.Exists))
-        {
-            foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories)
-                .Where(path => path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)
-                    || path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase)))
-            {
-                result.Add(Path.GetFullPath(file));
-            }
-        }
-
-        return result.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
+        return roots
+            .Where(Directory.Exists)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
+            .Where(path => path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase))
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     private static ApplyTransactionManifest? SelectTransaction(
@@ -884,52 +817,43 @@ public sealed class CyberNexusShell
             transactionId,
             "transaction.json");
 
-    private static bool IsResumable(ApplyTransactionManifest transaction)
-        => transaction.Status is TransactionStatus.Planned
-            or TransactionStatus.Running
-            or TransactionStatus.Partial
-            or TransactionStatus.Failed
-            or TransactionStatus.VerificationFailed
-            or TransactionStatus.Cancelled;
+    private static MenuItem Select(string title, IEnumerable<MenuItem> items)
+        => AnsiConsole.Prompt(
+            new SelectionPrompt<MenuItem>()
+                .Title($"[bold green]{Markup.Escape(title)}[/]")
+                .HighlightStyle(new Style(Color.Black, Color.Green1))
+                .UseConverter(item => $"{item.Title} [grey]// {item.Description}[/]")
+                .AddChoices(items));
 
-    private static async Task RunStatusAsync(string operation, Func<Task> work)
+    private static async Task RunAnimatedAsync(string operation, Func<Task> action)
     {
         await AnsiConsole.Status()
-            .Spinner(Spinner.Known.Binary)
+            .Spinner(Spinner.Known.Dots)
             .SpinnerStyle(Style.Parse("green"))
             .StartAsync($"[green]{Markup.Escape(operation)}[/]", async context =>
             {
                 context.Status($"[green]HANDSHAKE[/] // {Markup.Escape(operation)}");
-                await Task.Delay(80);
+                await Task.Delay(50);
                 context.Status($"[green]EXECUTE[/] // {Markup.Escape(operation)}");
-                await work();
+                await action();
                 context.Status("[green]SEAL RESULT[/]");
-                await Task.Delay(60);
+                await Task.Delay(40);
             });
     }
 
-    private static Panel BuildDemoPanel(string title, string content)
-        => new(content)
-        {
-            Header = new PanelHeader($" {title} "),
-            Border = BoxBorder.Double,
-            BorderStyle = new Style(Color.Green),
-            Expand = true
-        };
-
-    private static void RenderNexusHeader(string channel)
+    private static void RenderHeader(string channel)
     {
         AnsiConsole.Clear();
         DrawLogo();
-        var header = new Table()
+        var table = new Table()
             .Border(TableBorder.None)
             .Expand()
             .AddColumn(string.Empty)
             .AddColumn(new TableColumn(string.Empty).RightAligned());
-        header.AddRow(
+        table.AddRow(
             $"[bold green]{Markup.Escape(channel)}[/]",
             $"[grey]v{WinStateApplication.Version} // GRAPH LOCK // SHA-256 GATE // AUTO ROLLBACK[/]");
-        AnsiConsole.Write(header);
+        AnsiConsole.Write(table);
         AnsiConsole.Write(new Rule("[green]SECURE CONTROL PLANE[/]")
             .RuleStyle(new Style(Color.Green)));
     }
@@ -945,8 +869,8 @@ public sealed class CyberNexusShell
 
     private static async Task ShutdownAsync(CancellationToken cancellationToken)
     {
-        RenderNexusHeader("DISCONNECT");
-        foreach (var line in new[]
+        RenderHeader("DISCONNECT");
+        foreach (var stage in new[]
         {
             "seal transaction ledger",
             "flush update uplink",
@@ -955,20 +879,32 @@ public sealed class CyberNexusShell
         })
         {
             cancellationToken.ThrowIfCancellationRequested();
-            AnsiConsole.MarkupLine($"[green]PASS[/] {Markup.Escape(line)}");
-            await Task.Delay(90, cancellationToken);
+            AnsiConsole.MarkupLine($"[green]PASS[/] {Markup.Escape(stage)}");
+            await Task.Delay(70, cancellationToken);
         }
         AnsiConsole.MarkupLine("[bold green]SESSION CLOSED[/]");
     }
 
-    private static void ShowFailure(string message)
-    {
-        AnsiConsole.Write(new Panel(Markup.Escape(message))
-            .Header(new PanelHeader(" OPERATION BLOCKED "))
-            .Border(BoxBorder.Double)
-            .BorderStyle(new Style(Color.Red)));
-        WaitForReturn();
-    }
+    private static bool IsResumable(ApplyTransactionManifest transaction)
+        => transaction.Status is TransactionStatus.Planned
+            or TransactionStatus.Running
+            or TransactionStatus.Partial
+            or TransactionStatus.Failed
+            or TransactionStatus.VerificationFailed
+            or TransactionStatus.Cancelled;
+
+    private static bool IsWorkflowException(Exception exception)
+        => exception is IOException
+            or UnauthorizedAccessException
+            or InvalidDataException
+            or InvalidOperationException
+            or PlatformNotSupportedException;
+
+    private static bool IsUpdateException(Exception exception)
+        => exception is HttpRequestException
+            or TaskCanceledException
+            or InvalidDataException
+            or FormatException;
 
     private static string RiskMarkup(RiskLevel risk)
         => risk switch
@@ -981,7 +917,7 @@ public sealed class CyberNexusShell
             _ => Markup.Escape(risk.ToString())
         };
 
-    private static string StatusMarkup(TransactionStatus status)
+    private static string TransactionStatusMarkup(TransactionStatus status)
         => status switch
         {
             TransactionStatus.Succeeded => "[green]SUCCEEDED[/]",
@@ -1002,14 +938,20 @@ public sealed class CyberNexusShell
             _ => $"[red]{Markup.Escape(status.ToString().ToUpperInvariant())}[/]"
         };
 
+    private static void ShowError(string message)
+    {
+        AnsiConsole.Write(new Panel(Markup.Escape(message))
+            .Header(new PanelHeader(" OPERATION BLOCKED "))
+            .Border(BoxBorder.Double)
+            .BorderStyle(new Style(Color.Red)));
+        WaitForReturn();
+    }
+
     private static void WaitForReturn()
     {
         AnsiConsole.MarkupLine("\n[grey]Press any key to return...[/]");
         _ = Console.ReadKey(true);
     }
 
-    private sealed record NexusChannel(
-        string Id,
-        string Title,
-        string Description);
+    private sealed record MenuItem(string Id, string Title, string Description);
 }
