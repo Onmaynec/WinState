@@ -3,11 +3,11 @@
 </p>
 
 <p align="center">
-  <strong>Интерактивная консольная утилита для безопасного декларативного управления Windows.</strong>
+  <strong>Cyber-style консольная утилита для безопасного декларативного управления Windows.</strong>
 </p>
 
 <p align="center">
-  <a href="docs/TERMINAL_UI.md">🖥️ Control Center</a> ·
+  <a href="docs/CYBER_CONTROL_CENTER.md">🟢 Cyber Control Center</a> ·
   <a href="docs/PROFILE_ENGINE.md">🧩 Profile Engine</a> ·
   <a href="docs/ENVIRONMENT_PROVIDER.md">🌿 Environment Provider</a> ·
   <a href="docs/SECURITY.md">🛡️ Безопасность</a> ·
@@ -16,26 +16,31 @@
 
 ---
 
-## ✨ WinState `0.4.0-alpha.1`
+## 🟢 WinState `0.5.0-alpha.1`
 
-WinState получил первый настоящий Windows provider. Теперь Control Center умеет не только читать профиль, но и безопасно управлять пользовательскими и машинными переменными окружения и отдельными элементами `PATH`.
+WinState получил полностью новый интерактивный frontend в стиле отдельной hacker/cyber Windows-утилиты. Интерфейс стал ближе к визуальному языку **NexRoute**: плотный Control Node, номерные operation channels, boot trace, зелёная high-contrast палитра, живые статусы, action streams и анимации реальных операций.
+
+```text
+boot trace → control node → operation channel
+           → animated pipeline → live action trace → verified result
+```
+
+Визуальный апгрейд не меняет safety boundaries. Все изменения Windows по-прежнему выполняются только через application workflow:
 
 ```text
 Discover → Diff → Plan → Confirm
          → Checkpoint → Apply → Verify → Rollback
 ```
 
-Каждое изменение сначала появляется в execution plan. До применения создаётся checkpoint. После применения WinState повторно читает систему и проверяет результат. Ошибка включает автоматический rollback.
-
-## 🌿 Превью Environment Center
+## 🖥️ Превью Cyber Control Center
 
 <p align="center">
-  <img src="assets/screenshots/environment-center.svg" alt="WinState Environment Center" width="94%" />
+  <img src="assets/screenshots/cyber-control-center.svg" alt="WinState Cyber Control Center" width="96%" />
 </p>
 
-> Превью схематически показывает интерфейс. Реальный вид зависит от шрифта, размера окна и поддержки ANSI-цветов.
+> Превью схематически показывает интерфейс. Реальный вид зависит от терминала, шрифта, ширины окна и поддержки ANSI-цветов.
 
-## 🖥️ Запуск
+## 🚀 Запуск
 
 Требуется **.NET 8 SDK**.
 
@@ -50,35 +55,99 @@ dotnet test -c Release
 dotnet run --project src/WinState.Cli
 ```
 
-Без аргументов открывается полноэкранный **WinState Control Center** с большим символьным логотипом, стрелочным меню, отдельными страницами и анимациями операций.
+Без аргументов запускается интерактивный Cyber Control Center.
 
 | Клавиша | Действие |
 |---|---|
-| `↑` / `↓` | перемещение по меню |
-| `Enter` | открыть раздел |
-| `Y/N` | подтвердить или отменить системную операцию |
-| `Ctrl+C` | безопасно отменить текущий сценарий |
+| `↑` / `↓` | перемещение между operation channels |
+| `Enter` | открыть выбранный канал |
+| `Y/N` | подтвердить или отменить защищённую операцию |
+| `Ctrl+C` | безопасно прервать текущий сценарий |
 
-## 🧭 Разделы Control Center
+## 🎛️ Operation channels
 
-- **Обзор системы** — платформа, SQLite, профили и готовность providers;
-- **Центр профилей** — загрузка и проверка YAML;
-- **Environment Center** — plan, apply, status и rollback;
-- **Диагностика** — Doctor с цветными статусами;
-- **Хранилище** — миграции, таблицы и размер базы;
-- **Конфигурация** — вычисленные каталоги и параметры;
-- **Архитектура и roadmap** — карта модулей и следующий этап.
+| Канал | Раздел | Что показывает |
+|---|---|---|
+| `[01]` | **Control Node** | live telemetry, состояние providers, counters и event feed |
+| `[02]` | **Profile Vault** | YAML-профили, includes, variables и validation |
+| `[03]` | **Environment Ops** | plan, apply, verification и automatic rollback |
+| `[04]` | **Checkpoint Vault** | сохранённые manifest и ручное восстановление |
+| `[05]` | **Deep Scan** | анимированная диагностика модулей |
+| `[06]` | **Data Core** | SQLite schema, migrations и таблицы |
+| `[07]` | **Node Config** | каталоги, режим и runtime settings |
+| `[08]` | **System Map** | архитектура, safeguards и roadmap |
+| `[00]` | **Disconnect** | анимированное завершение сессии |
 
-## 🛡️ Безопасный Environment Provider
+## 🎞️ Анимации действий
 
-### Что поддерживается
+Каждая продолжительная операция отображается как pipeline:
+
+```text
+handshake → operation → seal result
+```
+
+Анимации используются для:
+
+- запуска Data Core;
+- загрузки и проверки профиля;
+- discovery и построения diff;
+- checkpoint/apply/verify transaction;
+- rollback;
+- Doctor scan;
+- проверки SQLite migrations.
+
+После транзакции интерфейс выводит поток реальных action results:
+
+```text
+11:45:27.132 PASS          env-create-1a2b3c // Переменная подтверждена.
+11:45:27.208 PASS          env-create-4d5e6f // PATH entry подтверждён.
+```
+
+UI не рисует фиктивный успех: status берётся из `EnvironmentExecutionReport` после фактической verification.
+
+Подробнее: [`docs/CYBER_CONTROL_CENTER.md`](docs/CYBER_CONTROL_CENTER.md).
+
+## 📡 Control Node telemetry
+
+Главный экран показывает:
+
+- версию, host, OS и architecture;
+- PID и uptime;
+- portable/user-data mode;
+- готовность Profile Engine, Data Core и Environment Provider;
+- число User/Machine variables;
+- число User/Machine PATH entries;
+- количество rollback checkpoint;
+- размер SQLite;
+- live event feed;
+- текущую threat/safety posture.
+
+## 🗃️ Profile Vault
+
+Profile Vault автоматически индексирует:
+
+```text
+<WINSTATE_HOME>/profiles
+./samples/**/*.yaml
+./samples/**/*.yml
+```
+
+При запуске из корня репозитория все sample-профили сразу появляются в меню. Анализ проходит полный pipeline:
+
+```text
+parse → includes/extends → variables → normalization → validation
+```
+
+## 🛡️ Environment Provider
+
+Поддерживается реальное управление:
 
 - User environment variables;
 - Machine environment variables;
 - User `PATH` entries;
 - Machine `PATH` entries;
-- создание и изменение переменных;
-- добавление, удаление и перестановка конкретных PATH entries;
+- созданием и изменением переменных;
+- добавлением, удалением и перестановкой управляемых PATH entries;
 - checkpoint, verification и rollback;
 - SQLite transaction history.
 
@@ -97,8 +166,6 @@ environment:
       position: append
 ```
 
-User actions имеют risk level `Low`, но всё равно требуют явного подтверждения.
-
 ### Machine scope
 
 ```yaml
@@ -107,50 +174,29 @@ environment:
     COMPANY_MODE: "managed"
 ```
 
-Machine actions имеют risk level `Medium`, помечаются `RequiresAdministrator` и требуют отдельного подтверждения. CLI требует `--allow-machine`, а терминал должен быть запущен от имени администратора.
+Machine actions получают risk level `Medium`, требуют отдельного подтверждения и elevated terminal.
 
-## 🚀 CLI-сценарий
+## ⚙️ CLI
 
-Проверить provider:
+Интерактивный дизайн не заменяет automation-режим:
 
 ```powershell
 winstate environment status
-```
-
-Построить план без изменений:
-
-```powershell
-winstate environment plan `
-  .\samples\environment-provider\user-sandbox.yaml
-```
-
-Применить после просмотра:
-
-```powershell
-winstate environment apply `
-  .\samples\environment-provider\user-sandbox.yaml `
-  --yes
-```
-
-Посмотреть checkpoint:
-
-```powershell
+winstate environment plan .\samples\environment-provider\user-sandbox.yaml
+winstate environment apply .\samples\environment-provider\user-sandbox.yaml --yes
 winstate environment checkpoints
+winstate environment rollback <manifest.json> --yes
 ```
 
-Откатить транзакцию:
+Для Machine scope:
 
 ```powershell
-winstate environment rollback `
-  .\.winstate\backups\environment\<transaction>\manifest.json `
-  --yes
+winstate environment apply .\profile.yaml --yes --allow-machine
 ```
-
-Сокращение `env` работает так же, как `environment`.
 
 ## 💾 Checkpoint и история
 
-Перед первым изменением WinState создаёт каталог:
+Перед первым изменением создаётся:
 
 ```text
 <WINSTATE_HOME>/backups/environment/<transaction-id>/
@@ -160,49 +206,32 @@ winstate environment rollback `
 └── env-remove-....json
 ```
 
-Для переменной сохраняются старое значение и факт её существования. Для PATH сохраняется полный список entries соответствующего scope.
-
 SQLite хранит:
 
-- `Transactions` — итог сценария;
-- `TransactionActions` — результат каждого действия;
-- `ActionBackups` — ссылки на checkpoint.
-
-## 🧩 Profile Engine
-
-Полный YAML Profile Engine из версии `0.3` остаётся основой provider-сценариев:
-
-- `includes` и `extends`;
-- защита от циклов;
-- `{{name}}` и `${name}`;
-- `WINSTATE_VAR_*`;
-- `--var name=value`;
-- объединение profile layers;
-- нормализация и дедупликация PATH.
-
-```powershell
-winstate validate .\samples\profile-engine\workstation.yaml `
-  --var developerName=Roman `
-  --var mode=true
-```
+- `Transactions`;
+- `TransactionActions`;
+- `ActionBackups`.
 
 ## ✅ Текущее состояние
 
 | Возможность | Статус |
 |---|---|
-| Интерактивный Control Center | ✅ |
-| Стрелочное управление, панели и анимации | ✅ |
+| NexRoute-inspired Cyber Control Center | ✅ |
+| Boot/shutdown trace | ✅ |
+| Номерные operation channels | ✅ |
+| Animated action pipelines | ✅ |
+| Live event feed и transaction stream | ✅ |
+| Автоиндексация sample-профилей | ✅ |
 | Полный YAML Profile Engine | ✅ |
 | Environment discovery и diff | ✅ |
 | Risk-aware execution plan | ✅ |
-| User/Machine variables | ✅ |
-| PATH add/remove/reorder | ✅ |
+| User/Machine variables и PATH | ✅ |
 | Checkpoint перед apply | ✅ |
 | Post-apply verification | ✅ |
-| Автоматический и ручной rollback | ✅ |
+| Automatic/manual rollback | ✅ |
 | SQLite transaction history | ✅ |
-| Linux + Windows CI | ✅ |
-| Общий cross-provider Apply Engine | ⏭️ следующий этап |
+| Ubuntu + Windows CI | ✅ |
+| Multi-provider Apply Engine | ⏭️ следующий этап |
 
 ## 🧪 Проверки
 
@@ -210,26 +239,27 @@ GitHub Actions выполняет на Ubuntu и Windows:
 
 ```text
 restore → build with warnings-as-errors → unit tests
-        → Profile Engine → terminal render → Doctor → SQLite
+        → Profile Engine → Cyber Control Center demo
+        → Environment status → Doctor → SQLite
 ```
 
-На Windows дополнительно выполняется настоящий временный User-scope сценарий:
+На Windows дополнительно выполняется настоящий временный сценарий:
 
 ```text
-environment plan
-→ apply
-→ checkpoint
-→ verification
-→ rollback
-→ assert variable and PATH restored
+plan → apply → checkpoint → verify → rollback
+     → assert variable and PATH fully restored
 ```
 
-Unit-тесты Environment Provider используют in-memory store и покрывают diff, no-op, risk, apply, verify и rollback без изменения машины разработчика.
+Cyber UI smoke test запускается без клавиатуры:
+
+```powershell
+winstate ui --demo --home .\.ci-winstate
+```
 
 ## 🧱 Архитектура
 
 ```text
-WinState.Terminal
+CyberTerminalShell
         ↓
 WinState.App workflows
         ↓
@@ -240,27 +270,24 @@ WinState.Core ───────────── Profile Engine / validatio
         └── WinState.Domain ────────── resources / actions / providers
 ```
 
-UI не содержит системной бизнес-логики: CLI и Control Center вызывают один `EnvironmentWorkflow`.
+Terminal frontend не содержит системной бизнес-логики и не может обойти safeguards.
 
-## ⚠️ Ограничения alpha-версии
+## ⚠️ Ограничения alpha
 
-- системный apply доступен только для environment-секции;
-- нет secrets adapter;
-- нет удаления обычной переменной через profile state;
+- системный apply пока доступен только для environment-секции;
+- secrets adapter ещё не реализован;
 - нет общего resume/reboot engine;
 - Machine scope зависит от реальных прав процесса;
 - WinState не заменяет полный backup Windows.
 
 ## 🗺️ Следующий этап
 
-`0.5.0-alpha.1` — общий **Apply Engine**:
+`0.6.0-alpha.1` — общий **multi-provider Apply Engine**:
 
 ```text
-multiple providers → unified transaction → risk groups
-                   → dependency execution → resume/reboot → rollback
+multiple providers → unified transaction → dependency graph
+                   → risk groups → resume/reboot → rollback
 ```
-
-Подробнее: [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
 
 ## 📦 Portable ZIP
 
