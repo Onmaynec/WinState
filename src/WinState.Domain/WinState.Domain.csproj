@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Независимая доменная модель и контракты WinState.</Description>
+  </PropertyGroup>
+</Project>
