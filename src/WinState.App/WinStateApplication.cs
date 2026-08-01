@@ -1,6 +1,7 @@
 using System.Collections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using WinState.Apply;
 using WinState.App.Diagnostics;
 using WinState.Core.Planning;
 using WinState.Core.Profiles;
@@ -19,7 +20,7 @@ public sealed record ProfileCatalogEntry(
 /// <summary>Композиционный корень и фасад прикладных сценариев WinState.</summary>
 public sealed class WinStateApplication : IAsyncDisposable
 {
-    public const string Version = "0.5.0-alpha.1";
+    public const string Version = "0.6.0-alpha.1";
 
     private readonly ServiceProvider _services;
 
@@ -33,6 +34,9 @@ public sealed class WinStateApplication : IAsyncDisposable
 
     public bool IsEnvironmentProviderSupported
         => _services.GetRequiredService<EnvironmentWorkflow>().IsSupported;
+
+    public IReadOnlyCollection<string> RegisteredApplyProviders
+        => _services.GetRequiredService<UnifiedApplyWorkflow>().RegisteredProviders;
 
     public static WinStateApplication Create(
         string? homeOverride = null,
@@ -63,6 +67,9 @@ public sealed class WinStateApplication : IAsyncDisposable
         services.AddSingleton<IEnvironmentStore, WindowsEnvironmentStore>();
         services.AddSingleton<EnvironmentStateProvider>();
         services.AddSingleton<EnvironmentWorkflow>();
+        services.AddSingleton<IApplyProviderExecutor, EnvironmentApplyExecutor>();
+        services.AddSingleton<ApplyEngine>();
+        services.AddSingleton<UnifiedApplyWorkflow>();
         services.AddSingleton<DoctorService>();
         return new WinStateApplication(services.BuildServiceProvider(), options);
     }
@@ -125,6 +132,45 @@ public sealed class WinStateApplication : IAsyncDisposable
         CancellationToken cancellationToken)
         => _services.GetRequiredService<EnvironmentWorkflow>()
             .RollbackAsync(checkpointPath, cancellationToken);
+
+    public Task<UnifiedApplyPlanReport> PlanUnifiedApplyAsync(
+        string profilePath,
+        IReadOnlyDictionary<string, string>? variables,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<UnifiedApplyWorkflow>()
+            .PlanAsync(profilePath, variables, ReadEnvironment(), cancellationToken);
+
+    public Task<ApplyEngineReport> ApplyUnifiedAsync(
+        string profilePath,
+        IReadOnlyDictionary<string, string>? variables,
+        ApplyEngineOptions options,
+        bool isElevated,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<UnifiedApplyWorkflow>()
+            .ApplyAsync(
+                profilePath,
+                variables,
+                ReadEnvironment(),
+                options,
+                isElevated,
+                cancellationToken);
+
+    public Task<ApplyEngineReport> ResumeUnifiedApplyAsync(
+        string manifestPath,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<UnifiedApplyWorkflow>()
+            .ResumeAsync(manifestPath, cancellationToken);
+
+    public Task<ApplyEngineReport> RollbackUnifiedApplyAsync(
+        string manifestPath,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<UnifiedApplyWorkflow>()
+            .RollbackAsync(manifestPath, cancellationToken);
+
+    public Task<UnifiedApplyStatusReport> GetUnifiedApplyStatusAsync(
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<UnifiedApplyWorkflow>()
+            .GetStatusAsync(cancellationToken);
 
     public Task<DoctorReport> RunDoctorAsync(CancellationToken cancellationToken)
         => _services.GetRequiredService<DoctorService>().RunAsync(cancellationToken);
