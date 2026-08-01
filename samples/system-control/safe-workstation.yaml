@@ -31,7 +31,7 @@ startup:
     scope: user
     state: absent
 
-scheduledTasks:
+tasks:
   - name: WinState Example Maintenance
     state: absent
     schedule: logon
