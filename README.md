@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="WinState — Git для конфигурации Windows" width="100%" />
+  <img src="assets/banner.svg" alt="WinState — декларативное управление Windows" width="100%" />
 </p>
 
 <p align="center">
@@ -7,40 +7,40 @@
 </p>
 
 <p align="center">
-  <a href="docs/CYBER_CONTROL_CENTER.md">🟢 Cyber Control Center</a> ·
+  <a href="docs/CYBER_CONTROL_CENTER.md">🟢 Nexus UI</a> ·
+  <a href="docs/APPLY_ENGINE.md">🧠 Apply Engine</a> ·
+  <a href="docs/AUTO_UPDATE.md">📡 Автообновление</a> ·
   <a href="docs/PROFILE_ENGINE.md">🧩 Profile Engine</a> ·
-  <a href="docs/ENVIRONMENT_PROVIDER.md">🌿 Environment Provider</a> ·
-  <a href="docs/SECURITY.md">🛡️ Безопасность</a> ·
-  <a href="docs/IMPLEMENTATION_PLAN.md">🗺️ Roadmap</a>
+  <a href="docs/SECURITY.md">🛡️ Безопасность</a>
 </p>
 
 ---
 
-## 🟢 WinState `0.5.0-alpha.1`
+## 🟢 WinState `0.6.0-alpha.1`
 
-WinState получил полностью новый интерактивный frontend в стиле отдельной hacker/cyber Windows-утилиты. Интерфейс стал ближе к визуальному языку **NexRoute**: плотный Control Node, номерные operation channels, boot trace, зелёная high-contrast палитра, живые статусы, action streams и анимации реальных операций.
+Версия `0.6` добавляет два больших системных модуля:
 
-```text
-boot trace → control node → operation channel
-           → animated pipeline → live action trace → verified result
-```
-
-Визуальный апгрейд не меняет safety boundaries. Все изменения Windows по-прежнему выполняются только через application workflow:
+1. **Unified Apply Engine** — единый transaction pipeline для нескольких providers.
+2. **Update Uplink** — автоматическая проверка и безопасная установка актуального GitHub Release.
 
 ```text
-Discover → Diff → Plan → Confirm
-         → Checkpoint → Apply → Verify → Rollback
+profile providers → unified execution graph → risk groups
+                  → all checkpoints → apply → verify
+                  → resume / reboot pending / cross-provider rollback
+
+GitHub Releases → semantic version → ZIP + SHA-256
+                → safe staging → updater process → restart
 ```
 
-## 🖥️ Превью Cyber Control Center
+> В `0.6` общий engine уже multi-provider, но первым реальным зарегистрированным adapter остаётся `Environment Provider`. Следующие providers смогут подключаться к тому же pipeline без копирования orchestration-кода.
+
+## 🖥️ Превью Nexus Control Fabric
 
 <p align="center">
-  <img src="assets/screenshots/cyber-control-center.svg" alt="WinState Cyber Control Center" width="96%" />
+  <img src="assets/screenshots/nexus-control-fabric.svg" alt="WinState Nexus Control Fabric" width="96%" />
 </p>
 
-> Превью схематически показывает интерфейс. Реальный вид зависит от терминала, шрифта, ширины окна и поддержки ANSI-цветов.
-
-## 🚀 Запуск
+## 🚀 Запуск из исходников
 
 Требуется **.NET 8 SDK**.
 
@@ -55,130 +55,186 @@ dotnet test -c Release
 dotnet run --project src/WinState.Cli
 ```
 
-Без аргументов запускается интерактивный Cyber Control Center.
+Без аргументов запускается интерактивный **Nexus Control Fabric**.
 
 | Клавиша | Действие |
 |---|---|
-| `↑` / `↓` | перемещение между operation channels |
-| `Enter` | открыть выбранный канал |
-| `Y/N` | подтвердить или отменить защищённую операцию |
-| `Ctrl+C` | безопасно прервать текущий сценарий |
+| `↑` / `↓` | выбрать operation channel |
+| `Enter` | открыть канал |
+| `Y/N` | подтвердить или заблокировать защищённую операцию |
+| `Ctrl+C` | отменить сценарий; engine сохранит manifest и применит policy rollback |
 
-## 🎛️ Operation channels
+## 🎛️ Верхний уровень Nexus
 
-| Канал | Раздел | Что показывает |
+| Канал | Назначение |
+|---|---|
+| `[01] CYBER CONTROL CENTER` | прежние Profile Vault, Environment Ops, Deep Scan и Data Core |
+| `[02] TRANSACTION MATRIX` | общий execution graph, risk groups, apply, resume и rollback |
+| `[03] UPDATE UPLINK` | проверка GitHub Releases, SHA-256 и установка обновления |
+| `[00] DISCONNECT` | безопасное завершение с shutdown trace |
+
+## 🧠 Unified Apply Engine
+
+Новый проект `WinState.Apply` не зависит от UI, YAML, SQLite или конкретного Windows API. Он получает готовые `PlannedAction` и provider executors.
+
+### Execution graph
+
+Engine:
+
+- объединяет actions разных providers;
+- проверяет уникальность action ID;
+- проверяет отсутствующие dependencies;
+- обнаруживает циклы;
+- выполняет детерминированную topological sort;
+- группирует действия по уровням риска;
+- отдельно учитывает admin, reboot и irreversible actions.
+
+### Transaction pipeline
+
+```text
+Build graph
+→ validate policy
+→ prepare rollback for every reversible action
+→ atomically persist transaction.json
+→ execute in dependency order
+→ verify each action
+→ persist progress after every verified action
+→ finish or automatic cross-provider rollback
+```
+
+Manifest хранится здесь:
+
+```text
+<WINSTATE_HOME>/backups/transactions/<transaction-id>/transaction.json
+```
+
+Provider backups находятся внутри той же transaction directory:
+
+```text
+providers/<provider-id>/...
+```
+
+### Resume
+
+Если процесс остановился между действиями, Transaction Matrix может загрузить manifest и продолжить сценарий. Уже подтверждённые действия пропускаются.
+
+### Reboot pending
+
+Если применённое действие требует перезагрузки, но автоматический reboot не разрешён, транзакция получает статус:
+
+```text
+SucceededRebootPending
+```
+
+WinState не перезагружает компьютер без отдельной будущей reboot policy.
+
+### Cross-provider rollback
+
+При ошибке или ручном откате engine проходит успешно применённые actions в обратном порядке и вызывает соответствующий provider executor.
+
+## 📡 Автоматическое обновление
+
+Update Uplink проверяет Releases репозитория `Onmaynec/WinState` при запуске не чаще одного раза в 6 часов.
+
+Режим по умолчанию:
+
+```text
+check → показать новую версию → спросить разрешение
+```
+
+### Безопасный update pipeline
+
+```text
+GitHub Releases API
+→ filter draft/channel
+→ Semantic Version comparison
+→ select matching win-x64 / win-arm64 ZIP
+→ download ZIP and .sha256
+→ verify SHA-256
+→ safe extraction with path traversal protection
+→ require winstate.release.json marker
+→ start separate updater process
+→ exit current WinState
+→ backup installed files
+→ replace files
+→ restart winstate.exe
+```
+
+### Source checkout и release build
+
+Самообновление файлов включается только у распакованной официальной release-сборки, где одновременно присутствуют:
+
+```text
+winstate.exe
+winstate.release.json
+```
+
+Запуск через `dotnet run` **никогда не перезаписывает Git-репозиторий**. В source mode Update Uplink проверяет версию, но для обновления предлагает:
+
+```powershell
+git pull
+```
+
+### Настройки автообновления
+
+| Переменная | Значения | По умолчанию |
 |---|---|---|
-| `[01]` | **Control Node** | live telemetry, состояние providers, counters и event feed |
-| `[02]` | **Profile Vault** | YAML-профили, includes, variables и validation |
-| `[03]` | **Environment Ops** | plan, apply, verification и automatic rollback |
-| `[04]` | **Checkpoint Vault** | сохранённые manifest и ручное восстановление |
-| `[05]` | **Deep Scan** | анимированная диагностика модулей |
-| `[06]` | **Data Core** | SQLite schema, migrations и таблицы |
-| `[07]` | **Node Config** | каталоги, режим и runtime settings |
-| `[08]` | **System Map** | архитектура, safeguards и roadmap |
-| `[00]` | **Disconnect** | анимированное завершение сессии |
+| `WINSTATE_AUTO_UPDATE` | `off`, `check`, `prompt`, `install` | `prompt` |
+| `WINSTATE_UPDATE_CHANNEL` | `stable`, `prerelease` | `prerelease` |
+| `WINSTATE_UPDATE_INTERVAL_HOURS` | положительное число | `6` |
+| `WINSTATE_UPDATE_TIMEOUT_SECONDS` | положительное число | `6` |
+| `WINSTATE_UPDATE_RUNTIME` | `win-x64`, `win-arm64` | определяется автоматически |
+| `WINSTATE_UPDATE_REPOSITORY` | `owner/repo` | `Onmaynec/WinState` |
+
+Полностью автоматический режим:
+
+```powershell
+$env:WINSTATE_AUTO_UPDATE = "install"
+.\winstate.exe
+```
+
+Отключение проверки:
+
+```powershell
+$env:WINSTATE_AUTO_UPDATE = "off"
+```
+
+Подробнее: [`docs/AUTO_UPDATE.md`](docs/AUTO_UPDATE.md).
 
 ## 🎞️ Анимации действий
 
-Каждая продолжительная операция отображается как pipeline:
+Nexus показывает этапы реальных операций:
 
 ```text
-handshake → operation → seal result
+HANDSHAKE → EXECUTE → SEAL RESULT
 ```
 
-Анимации используются для:
+Анимации используются при:
 
-- запуска Data Core;
-- загрузки и проверки профиля;
-- discovery и построения diff;
-- checkpoint/apply/verify transaction;
-- rollback;
-- Doctor scan;
-- проверки SQLite migrations.
+- индексации transaction manifests;
+- сборке unified graph;
+- создании checkpoints;
+- apply и verification;
+- resume и rollback;
+- подключении к GitHub Releases;
+- загрузке и проверке update package;
+- Profile Engine, Doctor и SQLite.
 
-После транзакции интерфейс выводит поток реальных action results:
+После применения выводится action trace с фактическими provider results, а не декоративными статусами.
 
-```text
-11:45:27.132 PASS          env-create-1a2b3c // Переменная подтверждена.
-11:45:27.208 PASS          env-create-4d5e6f // PATH entry подтверждён.
-```
+## 🌿 Environment Provider
 
-UI не рисует фиктивный успех: status берётся из `EnvironmentExecutionReport` после фактической verification.
+Первый adapter общего engine управляет:
 
-Подробнее: [`docs/CYBER_CONTROL_CENTER.md`](docs/CYBER_CONTROL_CENTER.md).
+- User/Machine environment variables;
+- User/Machine `PATH` entries;
+- create/modify;
+- PATH add/remove/reorder;
+- checkpoint;
+- post-apply verification;
+- automatic/manual rollback.
 
-## 📡 Control Node telemetry
-
-Главный экран показывает:
-
-- версию, host, OS и architecture;
-- PID и uptime;
-- portable/user-data mode;
-- готовность Profile Engine, Data Core и Environment Provider;
-- число User/Machine variables;
-- число User/Machine PATH entries;
-- количество rollback checkpoint;
-- размер SQLite;
-- live event feed;
-- текущую threat/safety posture.
-
-## 🗃️ Profile Vault
-
-Profile Vault автоматически индексирует:
-
-```text
-<WINSTATE_HOME>/profiles
-./samples/**/*.yaml
-./samples/**/*.yml
-```
-
-При запуске из корня репозитория все sample-профили сразу появляются в меню. Анализ проходит полный pipeline:
-
-```text
-parse → includes/extends → variables → normalization → validation
-```
-
-## 🛡️ Environment Provider
-
-Поддерживается реальное управление:
-
-- User environment variables;
-- Machine environment variables;
-- User `PATH` entries;
-- Machine `PATH` entries;
-- созданием и изменением переменных;
-- добавлением, удалением и перестановкой управляемых PATH entries;
-- checkpoint, verification и rollback;
-- SQLite transaction history.
-
-Неописанные переменные и неизвестные элементы PATH не удаляются.
-
-### User scope
-
-```yaml
-environment:
-  user:
-    DEV_MODE: "true"
-
-  userPath:
-    - path: "C:\\Dev\\bin"
-      state: present
-      position: append
-```
-
-### Machine scope
-
-```yaml
-environment:
-  machine:
-    COMPANY_MODE: "managed"
-```
-
-Machine actions получают risk level `Medium`, требуют отдельного подтверждения и elevated terminal.
-
-## ⚙️ CLI
-
-Интерактивный дизайн не заменяет automation-режим:
+Существующие automation-команды сохранены:
 
 ```powershell
 winstate environment status
@@ -188,114 +244,112 @@ winstate environment checkpoints
 winstate environment rollback <manifest.json> --yes
 ```
 
-Для Machine scope:
+## 🧩 Profile Engine
 
-```powershell
-winstate environment apply .\profile.yaml --yes --allow-machine
-```
+Поддерживаются:
 
-## 💾 Checkpoint и история
-
-Перед первым изменением создаётся:
-
-```text
-<WINSTATE_HOME>/backups/environment/<transaction-id>/
-├── manifest.json
-├── env-create-....json
-├── env-modify-....json
-└── env-remove-....json
-```
-
-SQLite хранит:
-
-- `Transactions`;
-- `TransactionActions`;
-- `ActionBackups`.
-
-## ✅ Текущее состояние
-
-| Возможность | Статус |
-|---|---|
-| NexRoute-inspired Cyber Control Center | ✅ |
-| Boot/shutdown trace | ✅ |
-| Номерные operation channels | ✅ |
-| Animated action pipelines | ✅ |
-| Live event feed и transaction stream | ✅ |
-| Автоиндексация sample-профилей | ✅ |
-| Полный YAML Profile Engine | ✅ |
-| Environment discovery и diff | ✅ |
-| Risk-aware execution plan | ✅ |
-| User/Machine variables и PATH | ✅ |
-| Checkpoint перед apply | ✅ |
-| Post-apply verification | ✅ |
-| Automatic/manual rollback | ✅ |
-| SQLite transaction history | ✅ |
-| Ubuntu + Windows CI | ✅ |
-| Multi-provider Apply Engine | ⏭️ следующий этап |
+- `includes` и `extends`;
+- защита от циклов;
+- `{{name}}` и `${name}`;
+- `WINSTATE_VAR_*`;
+- `--var name=value`;
+- объединение profile layers;
+- нормализация и дедупликация PATH.
 
 ## 🧪 Проверки
 
 GitHub Actions выполняет на Ubuntu и Windows:
 
 ```text
-restore → build with warnings-as-errors → unit tests
-        → Profile Engine → Cyber Control Center demo
-        → Environment status → Doctor → SQLite
+restore
+→ build with warnings-as-errors
+→ all unit tests
+→ version assertion
+→ Profile Engine smoke test
+→ Nexus demo render
+→ Environment status
+→ Doctor and SQLite
 ```
 
-На Windows дополнительно выполняется настоящий временный сценарий:
+Windows дополнительно выполняет:
 
 ```text
-plan → apply → checkpoint → verify → rollback
-     → assert variable and PATH fully restored
+real User environment plan/apply/verify/rollback
+→ assert variable and PATH restored
+
+self-contained win-x64 publish
+→ create ZIP and .sha256
+→ extract package
+→ assert winstate.exe and winstate.release.json
 ```
 
-Cyber UI smoke test запускается без клавиатуры:
-
-```powershell
-winstate ui --demo --home .\.ci-winstate
-```
+Apply Engine tests проверяют dependency order, risk groups, cycle detection, reboot-pending и rollback между двумя fake providers. Update tests проверяют semantic version и выбор stable/prerelease Releases без сетевых запросов.
 
 ## 🧱 Архитектура
 
 ```text
-CyberTerminalShell
-        ↓
-WinState.App workflows
-        ↓
-WinState.Core ───────────── Profile Engine / validation / planning
-        ├── WinState.Providers.Environment
-        ├── WinState.Infrastructure
-        ├── WinState.Storage ───────── SQLite history / migrations
-        └── WinState.Domain ────────── resources / actions / providers
+CyberNexusShell ─────────────── Update Uplink
+       │                              │
+       ▼                              ▼
+WinState.App workflows          WinState.Update
+       │
+       ▼
+WinState.Apply ── unified graph / manifest / resume / rollback
+       │
+       ├── EnvironmentApplyExecutor
+       ▼
+Provider implementations
+       │
+       ├── WinState.Providers.Environment
+       ├── WinState.Storage
+       ├── WinState.Core
+       └── WinState.Domain
 ```
 
-Terminal frontend не содержит системной бизнес-логики и не может обойти safeguards.
+## 🛡️ Safety boundaries
+
+- план всегда строится до изменения системы;
+- все checkpoints создаются до первого apply;
+- success возможен только после verification;
+- elevated, Critical и irreversible groups требуют отдельного разрешения;
+- automatic rollback включён по умолчанию;
+- manifest записывается через temporary file и atomic replace;
+- updater принимает только HTTPS GitHub Release assets;
+- ZIP проверяется SHA-256;
+- ZIP traversal блокируется;
+- source checkout не перезаписывается;
+- updater не изменяет `.winstate`, `profiles` и `logs`.
 
 ## ⚠️ Ограничения alpha
 
-- системный apply пока доступен только для environment-секции;
-- secrets adapter ещё не реализован;
-- нет общего resume/reboot engine;
-- Machine scope зависит от реальных прав процесса;
-- WinState не заменяет полный backup Windows.
+- реальный provider adapter пока один — Environment;
+- resume продолжает действия, но полноценная reboot orchestration ещё не запускает продолжение после входа в Windows;
+- package authenticity основана на GitHub HTTPS и SHA-256 asset; code signing запланирован позже;
+- updater использует Windows PowerShell для замены занятых файлов после выхода процесса;
+- WinState не заменяет полный образ или backup Windows.
 
 ## 🗺️ Следующий этап
 
-`0.6.0-alpha.1` — общий **multi-provider Apply Engine**:
+`0.7.0-alpha.1` — Packages и Windows Features:
 
 ```text
-multiple providers → unified transaction → dependency graph
-                   → risk groups → resume/reboot → rollback
+WinGet Provider + Optional Features
+→ ownership policy → unified Apply Engine
+→ reboot planning → verified rollback boundaries
 ```
 
-## 📦 Portable ZIP
+## 📦 Release package
 
 ```powershell
-.\scripts\package.ps1
+.\scripts\package.ps1 -Runtime win-x64 -Version 0.6.0-alpha.1
 ```
 
-Архив и SHA-256 создаются в `artifacts/`.
+Создаются:
+
+```text
+artifacts/WinState-0.6.0-alpha.1-win-x64.zip
+artifacts/WinState-0.6.0-alpha.1-win-x64.zip.sha256
+```
 
 ## 📄 Лицензия
 
