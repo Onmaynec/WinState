@@ -5,6 +5,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\WinState.Apply\WinState.Apply.csproj" />
     <ProjectReference Include="..\..\src\WinState.Domain\WinState.Domain.csproj" />
+    <ProjectReference Include="..\..\src\WinState.Providers.Features\WinState.Providers.Features.csproj" />
+    <ProjectReference Include="..\..\src\WinState.Providers.Packages\WinState.Providers.Packages.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
