@@ -96,7 +96,7 @@ public sealed class EnvironmentStateProviderTests
                 EnvironmentScope.User,
                 "DEV_MODE",
                 CancellationToken.None));
-            Assert.Equal([@"C:\Bin"], await store.ReadPathAsync(
+            Assert.Equal(new[] { @"C:\Bin" }, await store.ReadPathAsync(
                 EnvironmentScope.User,
                 CancellationToken.None));
         }
@@ -146,7 +146,7 @@ public sealed class EnvironmentStateProviderTests
     }
 
     private static ProviderContext Context()
-        => new("test", true, Environment.CurrentDirectory);
+        => new("test", true, System.Environment.CurrentDirectory);
 
     private static WinStateProfile Profile(
         IReadOnlyDictionary<string, string>? user = null,
