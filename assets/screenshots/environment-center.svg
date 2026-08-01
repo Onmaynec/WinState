@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
+  <title id="title">WinState Environment Center preview</title>
+  <desc id="desc">Схематическое превью интерактивного плана Environment Provider.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07121f"/>
+      <stop offset="1" stop-color="#101827"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#20d3ee"/>
+      <stop offset="1" stop-color="#4b8cff"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <rect width="1400" height="820" rx="28" fill="#050a12"/>
+  <rect x="24" y="24" width="1352" height="772" rx="22" fill="url(#background)" stroke="#24364c" stroke-width="2" filter="url(#shadow)"/>
+
+  <rect x="24" y="24" width="1352" height="54" rx="22" fill="#111d2c"/>
+  <circle cx="58" cy="51" r="8" fill="#ff6b6b"/>
+  <circle cx="84" cy="51" r="8" fill="#ffd166"/>
+  <circle cx="110" cy="51" r="8" fill="#55d187"/>
+  <text x="700" y="58" text-anchor="middle" font-family="Consolas, monospace" font-size="18" fill="#aab8c8">WinState 0.4.0-alpha.1 — Environment Center</text>
+
+  <text x="700" y="125" text-anchor="middle" font-family="Consolas, monospace" font-size="54" font-weight="700" fill="url(#accent)">WINSTATE</text>
+  <text x="700" y="154" text-anchor="middle" font-family="Consolas, monospace" font-size="17" fill="#7f91a6">Git for your Windows configuration</text>
+
+  <text x="58" y="202" font-family="Consolas, monospace" font-size="21" font-weight="700" fill="#38d9f2">ENVIRONMENT PLAN</text>
+  <text x="1340" y="202" text-anchor="end" font-family="Consolas, monospace" font-size="15" fill="#718197">↑↓ navigation · ENTER select · safeguards enabled</text>
+  <line x1="58" y1="220" x2="1342" y2="220" stroke="#1ed0ec" stroke-width="2" opacity="0.75"/>
+
+  <rect x="58" y="246" width="1284" height="116" rx="14" fill="#0c1725" stroke="#2a8fac" stroke-width="2"/>
+  <text x="82" y="276" font-family="Consolas, monospace" font-size="15" fill="#72869d">PROFILE</text>
+  <text x="286" y="276" font-family="Consolas, monospace" font-size="16" fill="#f2f7fb">Environment Provider Sandbox</text>
+  <text x="82" y="306" font-family="Consolas, monospace" font-size="15" fill="#72869d">CHANGES</text>
+  <text x="286" y="306" font-family="Consolas, monospace" font-size="16" fill="#f2f7fb">2</text>
+  <text x="480" y="306" font-family="Consolas, monospace" font-size="15" fill="#72869d">MACHINE ACTIONS</text>
+  <text x="706" y="306" font-family="Consolas, monospace" font-size="16" fill="#55d187">0</text>
+  <text x="866" y="306" font-family="Consolas, monospace" font-size="15" fill="#72869d">MAX RISK</text>
+  <text x="1035" y="306" font-family="Consolas, monospace" font-size="16" font-weight="700" fill="#55d187">LOW</text>
+  <text x="82" y="338" font-family="Consolas, monospace" font-size="15" fill="#72869d">PIPELINE</text>
+  <text x="286" y="338" font-family="Consolas, monospace" font-size="16" fill="#b7c5d5">Discover → Diff → Checkpoint → Apply → Verify → Rollback</text>
+
+  <rect x="58" y="388" width="1284" height="238" rx="14" fill="#09131f" stroke="#263c52" stroke-width="2"/>
+  <rect x="58" y="388" width="1284" height="44" rx="14" fill="#132235"/>
+  <text x="82" y="416" font-family="Consolas, monospace" font-size="15" font-weight="700" fill="#8bdcf0">RISK</text>
+  <text x="190" y="416" font-family="Consolas, monospace" font-size="15" font-weight="700" fill="#8bdcf0">SCOPE</text>
+  <text x="330" y="416" font-family="Consolas, monospace" font-size="15" font-weight="700" fill="#8bdcf0">OPERATION</text>
+  <text x="500" y="416" font-family="Consolas, monospace" font-size="15" font-weight="700" fill="#8bdcf0">RESOURCE</text>
+  <text x="820" y="416" font-family="Consolas, monospace" font-size="15" font-weight="700" fill="#8bdcf0">EXPLANATION</text>
+
+  <rect x="72" y="452" width="86" height="30" rx="8" fill="#123b2a"/>
+  <text x="115" y="473" text-anchor="middle" font-family="Consolas, monospace" font-size="14" font-weight="700" fill="#64df98">LOW</text>
+  <text x="190" y="473" font-family="Consolas, monospace" font-size="15" fill="#edf5fb">user</text>
+  <text x="330" y="473" font-family="Consolas, monospace" font-size="15" fill="#edf5fb">CREATE</text>
+  <text x="500" y="473" font-family="Consolas, monospace" font-size="15" fill="#ffd166">WINSTATE_ENV_PROVIDER_SAMPLE</text>
+  <text x="820" y="473" font-family="Consolas, monospace" font-size="15" fill="#aebed0">Создать user переменную.</text>
+
+  <line x1="76" y1="502" x2="1320" y2="502" stroke="#203449"/>
+
+  <rect x="72" y="520" width="86" height="30" rx="8" fill="#123b2a"/>
+  <text x="115" y="541" text-anchor="middle" font-family="Consolas, monospace" font-size="14" font-weight="700" fill="#64df98">LOW</text>
+  <text x="190" y="541" font-family="Consolas, monospace" font-size="15" fill="#edf5fb">user</text>
+  <text x="330" y="541" font-family="Consolas, monospace" font-size="15" fill="#edf5fb">CREATE</text>
+  <text x="500" y="541" font-family="Consolas, monospace" font-size="15" fill="#ffd166">...\samples\environment-provider\tools</text>
+  <text x="820" y="541" font-family="Consolas, monospace" font-size="15" fill="#aebed0">Добавить PATH entry в конец.</text>
+
+  <rect x="72" y="578" width="1248" height="30" rx="8" fill="#0e1d2b"/>
+  <text x="92" y="599" font-family="Consolas, monospace" font-size="14" fill="#6d8197">Every action supports rollback · unknown environment values stay unmanaged</text>
+
+  <rect x="58" y="652" width="1284" height="78" rx="14" fill="#151c24" stroke="#d4a62a" stroke-width="2"/>
+  <text x="82" y="681" font-family="Consolas, monospace" font-size="16" font-weight="700" fill="#ffd166">⚠ SAFEGUARD</text>
+  <text x="82" y="710" font-family="Consolas, monospace" font-size="16" fill="#f0f4f8">Применить показанный plan с checkpoint и verification?</text>
+  <rect x="1118" y="670" width="92" height="38" rx="9" fill="#123b2a" stroke="#55d187"/>
+  <text x="1164" y="695" text-anchor="middle" font-family="Consolas, monospace" font-size="15" font-weight="700" fill="#64df98">YES</text>
+  <rect x="1220" y="670" width="92" height="38" rx="9" fill="#2a1820" stroke="#ff6b6b"/>
+  <text x="1266" y="695" text-anchor="middle" font-family="Consolas, monospace" font-size="15" font-weight="700" fill="#ff8585">NO</text>
+
+  <text x="58" y="770" font-family="Consolas, monospace" font-size="14" fill="#63758a">Checkpoint before mutation · post-apply verification · automatic rollback on failure</text>
+  <text x="1340" y="770" text-anchor="end" font-family="Consolas, monospace" font-size="14" fill="#38d9f2">● PROVIDER READY</text>
+</svg>
