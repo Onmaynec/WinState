@@ -38,7 +38,7 @@ public sealed class TransactionHistoryStore
         await _stateStore.InitializeAsync(cancellationToken);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        using var transaction = connection.BeginTransaction();
 
         await using (var command = connection.CreateCommand())
         {
@@ -100,7 +100,7 @@ public sealed class TransactionHistoryStore
             _ = await backupCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken);
+        transaction.Commit();
     }
 
     private SqliteConnection CreateConnection()
