@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="620" viewBox="0 0 1280 620" role="img" aria-labelledby="title desc">
+  <title id="title">WinState Doctor preview</title>
+  <desc id="desc">Терминал с успешной проверкой платформы, .NET, каталога данных и SQLite.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="1" stop-color="#101b2f"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect width="1280" height="620" rx="32" fill="#06101d"/>
+  <rect x="54" y="48" width="1172" height="524" rx="24" fill="url(#bg)" stroke="#243954" filter="url(#shadow)"/>
+  <rect x="54" y="48" width="1172" height="58" rx="24" fill="#172338"/>
+  <rect x="54" y="82" width="1172" height="24" fill="#172338"/>
+  <circle cx="92" cy="77" r="8" fill="#ff6b6b"/>
+  <circle cx="120" cy="77" r="8" fill="#ffd166"/>
+  <circle cx="148" cy="77" r="8" fill="#58d68d"/>
+  <text x="188" y="84" fill="#9fb6ce" font-family="Segoe UI, Arial" font-size="18">PowerShell — WinState</text>
+  <g font-family="Cascadia Mono, Consolas, monospace" font-size="24">
+    <text x="92" y="154" fill="#63d8ff">PS C:\WinState&gt;</text>
+    <text x="310" y="154" fill="#e7eef8">winstate doctor</text>
+    <text x="92" y="210" fill="#f4f7fb" font-weight="700">WINSTATE DOCTOR</text>
+    <text x="92" y="246" fill="#45627f">────────────────────────────────────────────────────────</text>
+    <text x="92" y="300" fill="#5ee59d">[OK  ]</text>
+    <text x="190" y="300" fill="#dce8f5">Платформа</text>
+    <text x="455" y="300" fill="#a9bdd2">Windows 11</text>
+    <text x="92" y="346" fill="#5ee59d">[OK  ]</text>
+    <text x="190" y="346" fill="#dce8f5">.NET</text>
+    <text x="455" y="346" fill="#a9bdd2">Runtime 8.0</text>
+    <text x="92" y="392" fill="#5ee59d">[OK  ]</text>
+    <text x="190" y="392" fill="#dce8f5">Каталог данных</text>
+    <text x="455" y="392" fill="#a9bdd2">C:\Users\Developer\AppData\Local\WinState</text>
+    <text x="92" y="438" fill="#5ee59d">[OK  ]</text>
+    <text x="190" y="438" fill="#dce8f5">SQLite</text>
+    <text x="455" y="438" fill="#a9bdd2">1 migration(s), state\winstate.db</text>
+    <text x="92" y="484" fill="#45627f">────────────────────────────────────────────────────────</text>
+    <text x="92" y="532" fill="#5ee59d" font-weight="700">Состояние: готово к работе.</text>
+  </g>
+</svg>

@@ -1,0 +1,15 @@
+{
+  "$schema": "./schemas/config.schema.json",
+  "portable": false,
+  "storage": {
+    "home": null,
+    "database": "state/winstate.db"
+  },
+  "profiles": {
+    "directory": "profiles"
+  },
+  "logging": {
+    "directory": "logs",
+    "minimumLevel": "Information"
+  }
+}

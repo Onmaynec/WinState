@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winstate.dev/schemas/config.schema.json",
+  "title": "WinState configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "portable": { "type": "boolean", "default": false },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "home": { "type": ["string", "null"] },
+        "database": { "type": "string", "minLength": 1 }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "directory": { "type": "string", "minLength": 1 }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "directory": { "type": "string", "minLength": 1 },
+        "minimumLevel": {
+          "type": "string",
+          "enum": ["Trace", "Debug", "Information", "Warning", "Error", "Critical", "None"]
+        }
+      }
+    }
+  }
+}

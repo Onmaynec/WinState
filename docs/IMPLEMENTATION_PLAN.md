@@ -1,47 +1,37 @@
-# 🗺️ План реализации
+# 🗺️ План реализации WinState
 
-## ✅ Этап 1 — архитектурное ядро
+## ✅ Этап 1 — архитектура (`0.1.0-alpha.1`)
 
-- solution и границы проектов;
-- доменные модели;
-- формат профиля и схема;
+- доменная модель;
 - provider contracts;
-- transaction model;
+- модель транзакций;
+- bootstrap YAML reader;
 - dependency graph;
-- bootstrap CLI;
-- документация и CI.
+- solution, тесты и CI.
 
-## Этап 2 — полный Profile Engine
+## ✅ Этап 2 — каркас приложения (`0.2.0-alpha.1`)
 
-- полноценный YAML parser;
-- includes и extends;
-- переменные и secret references;
-- конфликт-детектор;
+- отдельные проекты `App`, `Infrastructure`, `Storage`;
+- dependency injection и console logging;
+- `winstate.json`, переменные окружения и portable paths;
+- SQLite и идемпотентные миграции;
+- команды `doctor`, `config`, `storage`;
+- unit-тесты конфигурации и схемы;
+- Linux/Windows smoke tests.
+
+## ⏭️ Этап 3 — Profile Engine
+
+- полноценная YAML-модель;
+- includes и защита от циклов;
+- наследование;
+- переменные и приоритеты;
 - нормализация путей;
-- privacy filters.
+- JSON Schema validation.
 
-## Этап 3 — Environment vertical slice
+## Этап 4 — Environment Provider
 
-- discovery user/machine environment;
-- отдельная модель PATH;
-- diff и plan;
-- apply и verify;
-- checkpoint и rollback;
-- интеграционные тесты на Windows runner.
+Первый полный vertical slice: discovery → diff → plan → apply → verify → rollback.
 
-## Этап 4 — Apply Engine
+## Этапы 5–9
 
-- подтверждение плана;
-- risk policy;
-- DAG scheduler;
-- cancellation;
-- transaction persistence;
-- policies `stop`, `continue`, `rollback`.
-
-## Этап 5 — основные провайдеры
-
-Packages/WinGet, Windows Features, Services, Registry, Git Config, PowerShell Modules и Files.
-
-## Этап 6 — продуктовый слой
-
-SQLite, capture, drift, JSON/HTML reports, TUI, RU/EN, portable mode и подписываемые релизы.
+Apply Engine, остальные провайдеры, capture/export, TUI/отчёты и полноценный release pipeline.
