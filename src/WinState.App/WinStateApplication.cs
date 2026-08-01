@@ -19,7 +19,7 @@ public sealed record ProfileCatalogEntry(
 /// <summary>Композиционный корень и фасад прикладных сценариев WinState.</summary>
 public sealed class WinStateApplication : IAsyncDisposable
 {
-    public const string Version = "0.4.0-alpha.1";
+    public const string Version = "0.5.0-alpha.1";
 
     private readonly ServiceProvider _services;
 
