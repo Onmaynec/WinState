@@ -1,0 +1,97 @@
+name: verify-v0.8.0-alpha.1
+
+on:
+  push:
+    branches:
+      - release/verify-v0.8.0-alpha.1
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  verify-release:
+    runs-on: windows-latest
+    env:
+      TAG: v0.8.0-alpha.1
+      VERSION: 0.8.0-alpha.1
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Verify release assets and hashes
+        id: verify
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = @(
+            "WinState-$env:VERSION-win-x64.zip",
+            "WinState-$env:VERSION-win-x64.zip.sha256",
+            "WinState-$env:VERSION-win-arm64.zip",
+            "WinState-$env:VERSION-win-arm64.zip.sha256",
+            'SHA256SUMS'
+          )
+
+          $releaseJson = gh release view $env:TAG --repo $env:GITHUB_REPOSITORY --json tagName,name,isDraft,isPrerelease,url,assets
+          if ($LASTEXITCODE -ne 0) { throw "Release $env:TAG not found." }
+          $release = $releaseJson | ConvertFrom-Json
+          if ($release.isDraft) { throw 'Release is still a draft.' }
+          if (-not $release.isPrerelease) { throw 'Alpha release is not marked prerelease.' }
+          if ($release.tagName -ne $env:TAG) { throw "Unexpected tag: $($release.tagName)" }
+
+          $actual = @($release.assets | ForEach-Object { $_.name })
+          foreach ($name in $expected) {
+            if ($actual -notcontains $name) { throw "Missing release asset: $name" }
+          }
+
+          New-Item release-assets -ItemType Directory -Force | Out-Null
+          gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --dir release-assets
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset download failed.' }
+
+          $sumLines = Get-Content -LiteralPath release-assets/SHA256SUMS
+          foreach ($runtime in @('win-x64', 'win-arm64')) {
+            $zipName = "WinState-$env:VERSION-$runtime.zip"
+            $zipPath = Join-Path release-assets $zipName
+            $actualHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+
+            $sumLine = $sumLines | Where-Object { $_ -match [regex]::Escape($zipName) } | Select-Object -First 1
+            if (-not $sumLine) { throw "SHA256SUMS missing $zipName" }
+            $sumHash = ($sumLine -split '\s+')[0].ToLowerInvariant()
+            if ($actualHash -ne $sumHash) { throw "SHA256SUMS mismatch for $zipName" }
+
+            $individualLine = Get-Content -LiteralPath "$zipPath.sha256" | Select-Object -First 1
+            $individualHash = ($individualLine -split '\s+')[0].ToLowerInvariant()
+            if ($actualHash -ne $individualHash) { throw "Individual checksum mismatch for $zipName" }
+
+            $extract = Join-Path $PWD "extract-$runtime"
+            Expand-Archive -LiteralPath $zipPath -DestinationPath $extract -Force
+            if (-not (Test-Path (Join-Path $extract 'winstate.exe'))) { throw "winstate.exe missing in $zipName" }
+            if (-not (Test-Path (Join-Path $extract 'winstate.release.json'))) { throw "release marker missing in $zipName" }
+            $marker = Get-Content (Join-Path $extract 'winstate.release.json') -Raw | ConvertFrom-Json
+            if ($marker.version -ne $env:VERSION -or $marker.runtime -ne $runtime) {
+              throw "Invalid release marker in $zipName"
+            }
+          }
+
+          "release_url=$($release.url)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Record successful verification
+        if: success()
+        shell: pwsh
+        run: |
+          @"
+          ✅ **Release verification passed**
+
+          - tag: `$env:TAG`
+          - prerelease: yes
+          - assets: x64 ZIP, ARM64 ZIP, two individual SHA-256 files and `SHA256SUMS`
+          - both ZIP hashes were recalculated and matched
+          - both archives contain `winstate.exe` and a valid `winstate.release.json`
+          - release: ${{ steps.verify.outputs.release_url }}
+          "@ | Set-Content VERIFY_COMMENT.md -Encoding utf8
+          gh pr comment 8 --repo $env:GITHUB_REPOSITORY --body-file VERIFY_COMMENT.md
+
+      - name: Record failed verification
+        if: failure()
+        shell: pwsh
+        run: |
+          gh pr comment 8 --repo $env:GITHUB_REPOSITORY --body "❌ Release verification workflow failed. Inspect the verify-v0.8.0-alpha.1 Actions run."
