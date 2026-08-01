@@ -1,0 +1,37 @@
+schemaVersion: 1
+
+metadata:
+  name: Developer Workstation Packages
+  description: Пример WinGet packages и Windows Optional Features для Unified Apply Engine
+  author: WinState
+  profileVersion: 1
+
+settings:
+  strictMode: true
+  allowReboot: false
+
+packages:
+  - id: Git.Git
+    state: present
+    version: latest
+    source: winget
+    scope: machine
+    allowUpgrade: true
+    mayRequireReboot: false
+
+  - id: Microsoft.PowerShell
+    state: present
+    version: latest
+    source: winget
+    scope: machine
+    allowUpgrade: true
+    mayRequireReboot: false
+
+features:
+  - name: Microsoft-Windows-Subsystem-Linux
+    state: enabled
+    includeParents: true
+
+  - name: VirtualMachinePlatform
+    state: enabled
+    includeParents: true
