@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-label="WinState CLI preview">
+  <rect width="1100" height="620" rx="24" fill="#07111f"/>
+  <rect x="26" y="26" width="1048" height="568" rx="16" fill="#0b1826" stroke="#1d4055" stroke-width="2"/>
+  <circle cx="61" cy="60" r="8" fill="#ef6461"/><circle cx="88" cy="60" r="8" fill="#e9c46a"/><circle cx="115" cy="60" r="8" fill="#52b788"/>
+  <g font-family="Consolas, monospace" font-size="22">
+    <text x="58" y="118" fill="#69ddd0">PS C:\Tools&gt;</text><text x="220" y="118" fill="#eef7fb"> winstate validate .\samples\minimal\winstate.yaml</text>
+    <text x="58" y="170" fill="#9eb6c7">Профиль:</text><text x="195" y="170" fill="#eef7fb"> Minimal Developer Workstation</text>
+    <text x="58" y="208" fill="#9eb6c7">Schema:</text><text x="195" y="208" fill="#eef7fb"> 1</text>
+    <text x="58" y="246" fill="#9eb6c7">User environment:</text><text x="290" y="246" fill="#eef7fb"> 2</text>
+    <text x="58" y="284" fill="#9eb6c7">Machine environment:</text><text x="325" y="284" fill="#eef7fb"> 0</text>
+    <text x="58" y="342" fill="#57d68d">[OK]</text><text x="116" y="342" fill="#eef7fb"> Базовая структура профиля корректна.</text>
+    <text x="58" y="418" fill="#69ddd0">PS C:\Tools&gt;</text><text x="220" y="418" fill="#eef7fb"> winstate architecture</text>
+    <text x="58" y="470" fill="#b58cff">Profile → Validation → Discovery → Diff → Plan</text>
+    <text x="58" y="508" fill="#55a7ff">Checkpoint → Apply → Verify → Transaction → Rollback</text>
+    <text x="58" y="560" fill="#6d8ea4">Схематическое превью архитектурного этапа</text>
+  </g>
+</svg>
