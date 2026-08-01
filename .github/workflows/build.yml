@@ -33,7 +33,7 @@ jobs:
         run: |
           $version = dotnet run --project src/WinState.Cli --configuration Release --no-build -- --version
           if ($LASTEXITCODE -ne 0) { throw "Version command failed." }
-          if ($version -notmatch "0.7.0-alpha.1") { throw "Unexpected WinState version: $version" }
+          if ($version -notmatch "0.8.0-alpha.1") { throw "Unexpected WinState version: $version" }
       - name: Profile Engine smoke tests
         shell: pwsh
         run: |
@@ -41,6 +41,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Base Profile Engine smoke failed." }
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- validate samples/packages-features/developer-workstation.yaml
           if ($LASTEXITCODE -ne 0) { throw "Packages/features profile validation failed." }
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- validate samples/system-control/safe-workstation.yaml
+          if ($LASTEXITCODE -ne 0) { throw "System Control profile validation failed." }
       - name: Forge Control Fabric smoke test
         shell: pwsh
         run: |
@@ -51,6 +53,7 @@ jobs:
           if ($output -notmatch "PACKAGE & FEATURE FORGE") { throw "Package Forge panel was not rendered." }
           if ($output -notmatch "packages.winget") { throw "WinGet provider was not rendered." }
           if ($output -notmatch "windows.features") { throw "Features provider was not rendered." }
+          if ($output -notmatch "windows.system") { throw "System Control provider was not registered." }
           Write-Host $output
       - name: Environment Provider status
         shell: pwsh
@@ -66,7 +69,13 @@ jobs:
           Write-Host "winget: $winget"
           $dism = dism.exe /Online /Get-Features /Format:Table /English | Select-Object -First 12
           if ($LASTEXITCODE -ne 0) { throw "DISM feature inventory failed." }
+          $sc = sc.exe query EventLog | Select-Object -First 8
+          if ($LASTEXITCODE -ne 0) { throw "Service Control Manager query failed." }
+          $tasks = schtasks.exe /Query /FO LIST | Select-Object -First 8
+          if ($LASTEXITCODE -ne 0) { throw "Task Scheduler query failed." }
           Write-Host $dism
+          Write-Host $sc
+          Write-Host $tasks
       - name: Environment Provider Windows vertical slice
         if: runner.os == 'Windows'
         shell: pwsh
@@ -104,8 +113,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          .\scripts\package.ps1 -Runtime win-x64 -Version 0.7.0-alpha.1
-          $archive = Join-Path $PWD "artifacts/WinState-0.7.0-alpha.1-win-x64.zip"
+          .\scripts\package.ps1 -Runtime win-x64 -Version 0.8.0-alpha.1
+          $archive = Join-Path $PWD "artifacts/WinState-0.8.0-alpha.1-win-x64.zip"
           $checksum = "$archive.sha256"
           if (-not (Test-Path $archive)) { throw "Release ZIP was not created." }
           if (-not (Test-Path $checksum)) { throw "SHA-256 file was not created." }
