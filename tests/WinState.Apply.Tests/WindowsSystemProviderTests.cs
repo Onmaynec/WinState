@@ -149,7 +149,7 @@ public sealed class WindowsSystemProviderTests
         public RegistryValueSnapshot Registry { get; private set; } = new(false, "string", null);
         public ServiceSnapshot Service { get; set; } = new(false, "missing", "missing");
         public StartupEntrySnapshot Startup { get; private set; } = new(false, null);
-        public ScheduledTaskSnapshot Task { get; private set; } = new(false, null);
+        public ScheduledTaskSnapshot ScheduledTask { get; private set; } = new(false, null);
 
         public Task<RegistryValueSnapshot> GetRegistryAsync(RegistryValueProfile profile, CancellationToken cancellationToken)
             => Task.FromResult(Registry);
@@ -194,23 +194,23 @@ public sealed class WindowsSystemProviderTests
         }
 
         public Task<ScheduledTaskSnapshot> GetTaskAsync(ScheduledTaskProfile profile, CancellationToken cancellationToken)
-            => Task.FromResult(Task);
+            => Task.FromResult(ScheduledTask);
 
         public Task<WindowsSystemOperationResult> SetTaskAsync(ScheduledTaskProfile profile, CancellationToken cancellationToken)
         {
-            Task = new ScheduledTaskSnapshot(true, "<Task><Triggers><LogonTrigger /></Triggers><Actions><Exec><Command>test.exe</Command></Exec></Actions></Task>");
+            ScheduledTask = new ScheduledTaskSnapshot(true, "<Task><Triggers><LogonTrigger /></Triggers><Actions><Exec><Command>test.exe</Command></Exec></Actions></Task>");
             return Success("task set");
         }
 
         public Task<WindowsSystemOperationResult> DeleteTaskAsync(ScheduledTaskProfile profile, CancellationToken cancellationToken)
         {
-            Task = new ScheduledTaskSnapshot(false, null);
+            ScheduledTask = new ScheduledTaskSnapshot(false, null);
             return Success("task deleted");
         }
 
         public Task<WindowsSystemOperationResult> RestoreTaskAsync(string name, string xml, CancellationToken cancellationToken)
         {
-            Task = new ScheduledTaskSnapshot(true, xml);
+            ScheduledTask = new ScheduledTaskSnapshot(true, xml);
             return Success("task restored");
         }
 
