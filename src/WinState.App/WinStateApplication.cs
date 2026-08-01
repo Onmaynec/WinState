@@ -5,6 +5,7 @@ using WinState.App.Diagnostics;
 using WinState.Core.Planning;
 using WinState.Core.Profiles;
 using WinState.Infrastructure.Configuration;
+using WinState.Providers.EnvironmentVariables;
 using WinState.Storage;
 
 namespace WinState.App;
@@ -18,7 +19,7 @@ public sealed record ProfileCatalogEntry(
 /// <summary>Композиционный корень и фасад прикладных сценариев WinState.</summary>
 public sealed class WinStateApplication : IAsyncDisposable
 {
-    public const string Version = "0.3.0-alpha.1";
+    public const string Version = "0.4.0-alpha.1";
 
     private readonly ServiceProvider _services;
 
@@ -29,6 +30,9 @@ public sealed class WinStateApplication : IAsyncDisposable
     }
 
     public WinStateOptions Options { get; }
+
+    public bool IsEnvironmentProviderSupported
+        => _services.GetRequiredService<EnvironmentWorkflow>().IsSupported;
 
     public static WinStateApplication Create(
         string? homeOverride = null,
@@ -55,6 +59,10 @@ public sealed class WinStateApplication : IAsyncDisposable
         services.AddSingleton<ProfileValidator>();
         services.AddSingleton<DependencyGraph>();
         services.AddSingleton<SqliteStateStore>();
+        services.AddSingleton<TransactionHistoryStore>();
+        services.AddSingleton<IEnvironmentStore, WindowsEnvironmentStore>();
+        services.AddSingleton<EnvironmentStateProvider>();
+        services.AddSingleton<EnvironmentWorkflow>();
         services.AddSingleton<DoctorService>();
         return new WinStateApplication(services.BuildServiceProvider(), options);
     }
@@ -79,6 +87,44 @@ public sealed class WinStateApplication : IAsyncDisposable
         string path,
         CancellationToken cancellationToken)
         => ValidateProfileAsync(path, null, cancellationToken);
+
+    public Task<EnvironmentStatusReport> GetEnvironmentStatusAsync(
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<EnvironmentWorkflow>()
+            .GetStatusAsync(cancellationToken);
+
+    public Task<EnvironmentPlanReport> PlanEnvironmentAsync(
+        string profilePath,
+        IReadOnlyDictionary<string, string>? variables,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<EnvironmentWorkflow>()
+            .PlanAsync(profilePath, variables, ReadEnvironment(), cancellationToken);
+
+    public Task<EnvironmentExecutionReport> ApplyEnvironmentAsync(
+        string profilePath,
+        IReadOnlyDictionary<string, string>? variables,
+        bool allowMachineScope,
+        bool automaticRollback,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<EnvironmentWorkflow>()
+            .ApplyAsync(
+                profilePath,
+                variables,
+                ReadEnvironment(),
+                allowMachineScope,
+                automaticRollback,
+                cancellationToken);
+
+    public Task<IReadOnlyList<EnvironmentCheckpointEntry>> ListEnvironmentCheckpointsAsync(
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<EnvironmentWorkflow>()
+            .ListCheckpointsAsync(cancellationToken);
+
+    public Task<EnvironmentExecutionReport> RollbackEnvironmentAsync(
+        string checkpointPath,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<EnvironmentWorkflow>()
+            .RollbackAsync(checkpointPath, cancellationToken);
 
     public Task<DoctorReport> RunDoctorAsync(CancellationToken cancellationToken)
         => _services.GetRequiredService<DoctorService>().RunAsync(cancellationToken);
