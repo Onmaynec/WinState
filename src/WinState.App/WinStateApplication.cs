@@ -77,7 +77,7 @@ public sealed class WinStateApplication : IAsyncDisposable
         services.AddSingleton<WingetPackageProvider>();
         services.AddSingleton<IWindowsFeatureClient, DismWindowsFeatureClient>();
         services.AddSingleton<WindowsFeatureProvider>();
-        services.AddSingleton<IWindowsSystemClient, WindowsSystemClient>();
+        services.AddSingleton<IWindowsSystemClient>(_ => WindowsSystemClientFactory.Create());
         services.AddSingleton<WindowsSystemProvider>();
 
         services.AddSingleton<IApplyProviderExecutor, EnvironmentApplyExecutor>();
