@@ -2,100 +2,102 @@
 
 Все заметные изменения WinState документируются в этом файле.
 
+## [0.6.0-alpha.1] — 2026-08-01
+
+### Добавлено
+
+- новый проект `WinState.Apply` с общим multi-provider transaction engine;
+- единый dependency-aware execution graph;
+- deterministic topological sort, missing-dependency и cycle validation;
+- risk groups для Low/Medium/High/Critical actions;
+- отдельные policy gates для admin, Critical и irreversible actions;
+- checkpoint barrier: backup всех providers до первой мутации;
+- atomic persisted `transaction.json`;
+- progress persistence после каждого verified action;
+- resume незавершённых транзакций;
+- `SucceededRebootPending` без скрытой перезагрузки;
+- automatic и manual cross-provider rollback;
+- `EnvironmentApplyExecutor` как первый production adapter;
+- новый проект `WinState.Update`;
+- GitHub Releases discovery и stable/prerelease channels;
+- Semantic Version comparison;
+- автоматическая проверка обновлений при запуске;
+- режимы `off`, `check`, `prompt`, `install`;
+- загрузка release ZIP и `.sha256`;
+- SHA-256 verification;
+- защита ZIP extraction от path traversal;
+- обязательный `winstate.release.json` marker;
+- отдельный updater process после завершения WinState;
+- self-contained release packages `win-x64` и `win-arm64`;
+- Nexus Control Fabric, Transaction Matrix и Update Uplink;
+- unit-тесты execution graph, cross-provider rollback, reboot pending и updater semver;
+- package smoke test на Windows CI;
+- русские руководства Apply Engine и автообновления;
+- SVG-превью Nexus Control Fabric.
+
+### Изменено
+
+- версия App и CLI обновлена до `0.6.0-alpha.1`;
+- запуск без аргументов открывает `CyberNexusShell`;
+- прежний Cyber Control Center доступен как первый Nexus channel;
+- release pipeline сначала выполняет тесты, затем публикует два Windows runtime package;
+- package script создаёт self-contained ZIP, marker и SHA-256;
+- roadmap сдвинут на Packages и Windows Features в `0.7`.
+
+### Безопасность
+
+- все reversible checkpoints создаются до первого apply;
+- success фиксируется только после provider verification;
+- manifest обновляется после каждого verified action;
+- source checkout никогда не перезаписывается updater-ом;
+- self-install требует `winstate.exe` и release marker;
+- скачанный ZIP сверяется с опубликованным SHA-256;
+- unsafe ZIP paths блокируются;
+- updater не заменяет пользовательские `.winstate`, `profiles` и `logs`;
+- automatic rollback остаётся включённым по умолчанию.
+
+### Ограничения
+
+- общий engine поддерживает несколько providers, но production adapter пока один — Environment;
+- automatic resume после входа в Windows ещё не создаёт startup task;
+- Authenticode signing запланирован для позднего release-этапа;
+- updater работает только в Windows release package.
+
 ## [0.5.0-alpha.1] — 2026-08-01
 
 ### Добавлено
 
-- новый `CyberTerminalShell` как основной интерактивный frontend;
-- визуальный язык, вдохновлённый NexRoute: плотный control-node layout, зелёная cyber-палитра и номерные каналы;
-- boot trace с загрузкой Kernel, Profile Engine, Data Core, Provider и Safeguards;
-- shutdown trace при завершении сессии;
-- animated progress pipeline `handshake → operation → seal result`;
-- live event feed на главном экране;
-- live transaction action stream после apply и rollback;
-- Control Node telemetry: host, OS, PID, architecture, uptime, provider counters, checkpoint и SQLite;
-- разделы Profile Vault, Environment Ops, Checkpoint Vault, Deep Scan, Data Core, Node Config и System Map;
-- автоматическая индексация YAML-профилей из пользовательского vault и repository `samples`;
-- отдельное SVG-превью Cyber Control Center;
-- русская документация нового terminal frontend;
-- неинтерактивный cyber demo mode для CI.
-
-### Изменено
-
-- запуск без аргументов и команда `ui` теперь открывают Cyber Control Center;
-- версия приложения и CLI обновлена до `0.5.0-alpha.1`;
-- интерфейс Environment workflow показывает risk plan и реальные action results в едином визуальном стиле;
-- roadmap сдвинут: общий multi-provider Apply Engine запланирован на `0.6.0-alpha.1`.
+- `CyberTerminalShell` и NexRoute-inspired visual language;
+- номерные operation channels, boot/shutdown trace;
+- animated pipeline `handshake → operation → seal result`;
+- live event feed и transaction action stream;
+- Profile Vault, Environment Ops, Checkpoint Vault, Deep Scan, Data Core, Node Config и System Map;
+- автоматическая индексация repository sample-профилей;
+- cyber demo mode для CI.
 
 ### Безопасность
 
-- UI по-прежнему не содержит системной бизнес-логики;
-- все apply/rollback операции проходят через `WinStateApplication` и `EnvironmentWorkflow`;
-- новый frontend не изменяет confirmation policy;
-- Machine scope сохраняет отдельное elevated-подтверждение;
-- success отображается только после фактической verification;
+- UI остаётся presentation-only;
+- apply/rollback проходят через application workflow;
+- Machine scope требует отдельного elevated-подтверждения;
 - demo mode не выполняет системные изменения.
 
 ## [0.4.0-alpha.1] — 2026-08-01
 
-### Добавлено
-
-- первый реальный системный provider `WinState.Providers.Environment`;
-- discovery пользовательских и машинных переменных окружения;
-- discovery, добавление, удаление и перестановка PATH entries;
-- детерминированный environment diff и execution plan;
-- уровни риска: User scope — Low, Machine scope — Medium;
-- отдельное подтверждение Machine scope и требование elevated terminal;
-- checkpoint каждого действия до изменения системы;
-- post-apply verification для variables и PATH;
-- автоматический rollback при ошибке применения или проверки;
-- ручной rollback по сохранённому `manifest.json`;
-- SQLite history транзакций, action results и backup references;
-- CLI-команды `environment status/plan/apply/checkpoints/rollback`;
-- интерактивный Environment Center в Control Center;
-- unit-тесты provider vertical slice на in-memory store;
-- Windows CI-сценарий `plan → apply → verify → rollback`;
-- безопасный User-scope sample и русская документация.
-
-### Безопасность
-
-- `apply` не запускается без явного `--yes`;
-- Machine scope дополнительно требует `--allow-machine`;
-- checkpoint создаётся до первого изменения;
-- при ошибке автоматический rollback включён по умолчанию;
-- provider не удаляет переменные, которые не описаны как управляемые ресурсы;
-- CI проверяет полное восстановление тестовой переменной и PATH.
-
-### Ограничения
-
-- Environment Provider работает с User/Machine environment только на Windows;
-- Machine scope зависит от прав текущего процесса;
-- изменения становятся видны новым процессам после системного broadcast;
-- общий cross-provider Apply Engine, resume и reboot orchestration будут добавлены следующим этапом.
+- первый реальный Environment Provider;
+- User/Machine variables и PATH;
+- discovery, diff и risk-aware plan;
+- checkpoint, apply, verification и rollback;
+- SQLite transaction history;
+- Environment CLI/UI и настоящий Windows CI vertical slice.
 
 ## [0.3.0-alpha.1] — 2026-08-01
 
-### Добавлено
-
-- интерактивный WinState Control Center, запускаемый без аргументов;
-- стрелочное управление через `↑`, `↓` и `Enter`;
-- большой символьный логотип, отдельные панели и статусная строка;
-- spinner-анимации загрузки, диагностики, Profile Engine и SQLite;
-- экраны System Overview, Profile Center, Doctor, Storage, Configuration и Roadmap;
-- отдельный проект `WinState.Terminal` без бизнес-логики;
-- `winstate ui` и неинтерактивный `winstate ui --demo` для CI;
-- полноценный YAML Profile Engine на YamlDotNet;
-- `includes`, `extends` и обнаружение циклов;
-- переменные `{{name}}`, `${name}`, `WINSTATE_VAR_*` и `--var name=value`;
-- объединение environment-секций и нормализация PATH;
-- sample-профили inheritance/variables;
-- unit-тесты Profile Engine и новые smoke tests интерфейса.
-
-### Изменено
-
-- запуск `winstate` без параметров теперь открывает панель вместо обычной справки;
-- CLI оставлен как совместимый слой для автоматизации;
-- документация и README переработаны под формат полноценной terminal utility.
+- интерактивный Control Center;
+- стрелочное управление, панели, логотип и анимации;
+- полный YAML Profile Engine;
+- includes, extends, variables и normalization;
+- Profile Center и UI smoke tests.
 
 ## [0.2.0-alpha.1] — 2026-08-01
 
