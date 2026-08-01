@@ -28,13 +28,22 @@ jobs:
         run: dotnet test WinState.sln --configuration Release --no-build
       - name: CLI help smoke test
         run: dotnet run --project src/WinState.Cli --configuration Release --no-build -- --help
+      - name: Version smoke test
+        shell: pwsh
+        run: |
+          $version = dotnet run --project src/WinState.Cli --configuration Release --no-build -- --version
+          if ($LASTEXITCODE -ne 0) { throw "Version command failed." }
+          if ($version -notmatch "0.5.0-alpha.1") { throw "Unexpected WinState version: $version" }
       - name: Profile Engine smoke test
         run: dotnet run --project src/WinState.Cli --configuration Release --no-build -- validate samples/profile-engine/workstation.yaml --var developerName=CI --var mode=true
-      - name: Terminal dashboard smoke test
+      - name: Cyber Control Center smoke test
         shell: pwsh
         run: |
           $stateHome = Join-Path $PWD ".ci-winstate"
-          dotnet run --project src/WinState.Cli --configuration Release --no-build -- ui --demo --home $stateHome
+          $output = dotnet run --project src/WinState.Cli --configuration Release --no-build -- ui --demo --home $stateHome | Out-String
+          if ($LASTEXITCODE -ne 0) { throw "Cyber Control Center demo failed." }
+          if ($output -notmatch "CYBER CONTROL CENTER") { throw "Cyber Control Center signature was not rendered." }
+          Write-Host $output
       - name: Environment Provider status
         shell: pwsh
         run: |
