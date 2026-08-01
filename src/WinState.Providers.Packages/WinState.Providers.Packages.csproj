@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>WinGet packages provider для WinState.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinState.Domain\WinState.Domain.csproj" />
+  </ItemGroup>
+</Project>
