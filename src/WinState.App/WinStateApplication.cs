@@ -7,6 +7,8 @@ using WinState.Core.Planning;
 using WinState.Core.Profiles;
 using WinState.Infrastructure.Configuration;
 using WinState.Providers.EnvironmentVariables;
+using WinState.Providers.Features;
+using WinState.Providers.Packages;
 using WinState.Storage;
 
 namespace WinState.App;
@@ -20,7 +22,7 @@ public sealed record ProfileCatalogEntry(
 /// <summary>Композиционный корень и фасад прикладных сценариев WinState.</summary>
 public sealed class WinStateApplication : IAsyncDisposable
 {
-    public const string Version = "0.6.0-alpha.1";
+    public const string Version = "0.7.0-alpha.1";
 
     private readonly ServiceProvider _services;
 
@@ -64,10 +66,19 @@ public sealed class WinStateApplication : IAsyncDisposable
         services.AddSingleton<DependencyGraph>();
         services.AddSingleton<SqliteStateStore>();
         services.AddSingleton<TransactionHistoryStore>();
+
         services.AddSingleton<IEnvironmentStore, WindowsEnvironmentStore>();
         services.AddSingleton<EnvironmentStateProvider>();
         services.AddSingleton<EnvironmentWorkflow>();
+
+        services.AddSingleton<IWingetClient, ProcessWingetClient>();
+        services.AddSingleton<WingetPackageProvider>();
+        services.AddSingleton<IWindowsFeatureClient, DismWindowsFeatureClient>();
+        services.AddSingleton<WindowsFeatureProvider>();
+
         services.AddSingleton<IApplyProviderExecutor, EnvironmentApplyExecutor>();
+        services.AddSingleton<IApplyProviderExecutor, WingetApplyExecutor>();
+        services.AddSingleton<IApplyProviderExecutor, WindowsFeatureApplyExecutor>();
         services.AddSingleton<ApplyEngine>();
         services.AddSingleton<UnifiedApplyWorkflow>();
         services.AddSingleton<DoctorService>();
@@ -171,6 +182,11 @@ public sealed class WinStateApplication : IAsyncDisposable
         CancellationToken cancellationToken)
         => _services.GetRequiredService<UnifiedApplyWorkflow>()
             .GetStatusAsync(cancellationToken);
+
+    public Task<SystemProvidersStatusReport> GetSystemProvidersStatusAsync(
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<UnifiedApplyWorkflow>()
+            .GetProvidersStatusAsync(cancellationToken);
 
     public Task<DoctorReport> RunDoctorAsync(CancellationToken cancellationToken)
         => _services.GetRequiredService<DoctorService>().RunAsync(cancellationToken);
