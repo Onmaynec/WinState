@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="900" viewBox="0 0 1500 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#020805"/>
+      <stop offset="0.55" stop-color="#06130d"/>
+      <stop offset="1" stop-color="#020504"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M34 0H0V34" fill="none" stroke="#0c3d25" stroke-width="1" opacity="0.35"/>
+    </pattern>
+  </defs>
+  <rect width="1500" height="900" rx="26" fill="url(#bg)"/>
+  <rect width="1500" height="900" rx="26" fill="url(#grid)"/>
+  <rect x="25" y="25" width="1450" height="850" rx="20" fill="none" stroke="#25ff82" stroke-width="2" opacity="0.65"/>
+  <g font-family="Consolas, 'Courier New', monospace">
+    <text x="72" y="105" font-size="74" font-weight="700" fill="#2dff87" filter="url(#glow)">WINSTATE</text>
+    <text x="76" y="143" font-size="18" fill="#7fffb1">NEXUS/06  //  DECLARATIVE WINDOWS STATE FABRIC  //  VERIFIED EXECUTION ONLY</text>
+    <line x1="72" y1="170" x2="1425" y2="170" stroke="#25ff82" stroke-width="2"/>
+    <text x="74" y="208" font-size="22" font-weight="700" fill="#2dff87">NEXUS CONTROL FABRIC</text>
+    <text x="1015" y="208" font-size="16" fill="#76a989">v0.6.0-alpha.1 // GRAPH LOCK // SHA-256 GATE</text>
+
+    <g transform="translate(72 245)">
+      <rect width="650" height="230" rx="12" fill="#04110a" stroke="#24e879" stroke-width="2"/>
+      <text x="24" y="40" font-size="21" font-weight="700" fill="#2dff87">[02] TRANSACTION MATRIX</text>
+      <text x="24" y="76" font-size="17" fill="#a7fbc3">● ONLINE</text>
+      <text x="24" y="112" font-size="16" fill="#76a989">providers        environment</text>
+      <text x="24" y="142" font-size="16" fill="#76a989">execution graph  READY</text>
+      <text x="24" y="172" font-size="16" fill="#76a989">resume ledger    ARMED</text>
+      <text x="24" y="202" font-size="16" fill="#76a989">rollback         CROSS-PROVIDER</text>
+    </g>
+
+    <g transform="translate(778 245)">
+      <rect width="650" height="230" rx="12" fill="#04110a" stroke="#24e879" stroke-width="2"/>
+      <text x="24" y="40" font-size="21" font-weight="700" fill="#2dff87">[03] UPDATE UPLINK</text>
+      <text x="24" y="76" font-size="17" fill="#a7fbc3">● ARMED</text>
+      <text x="24" y="112" font-size="16" fill="#76a989">channel          PRERELEASE</text>
+      <text x="24" y="142" font-size="16" fill="#76a989">semantic version PASS</text>
+      <text x="24" y="172" font-size="16" fill="#76a989">ZIP checksum     SHA-256</text>
+      <text x="24" y="202" font-size="16" fill="#76a989">self install     RELEASE ONLY</text>
+    </g>
+
+    <g transform="translate(72 515)">
+      <rect width="1356" height="278" rx="12" fill="#020b06" stroke="#18884b" stroke-width="2"/>
+      <text x="24" y="42" font-size="20" font-weight="700" fill="#2dff87">SECURE OPERATION CHANNELS</text>
+      <text x="30" y="84" font-size="18" fill="#d7ffe3">▶ [01] CYBER CONTROL CENTER</text>
+      <text x="30" y="122" font-size="18" fill="#a7fbc3">  [02] TRANSACTION MATRIX</text>
+      <text x="30" y="160" font-size="18" fill="#a7fbc3">  [03] UPDATE UPLINK</text>
+      <text x="30" y="198" font-size="18" fill="#76a989">  [00] DISCONNECT</text>
+      <line x1="700" y1="28" x2="700" y2="248" stroke="#155d38"/>
+      <text x="735" y="74" font-size="17" fill="#2dff87">HANDSHAKE</text>
+      <text x="870" y="74" font-size="17" fill="#76a989">→</text>
+      <text x="910" y="74" font-size="17" fill="#2dff87">EXECUTE</text>
+      <text x="1030" y="74" font-size="17" fill="#76a989">→</text>
+      <text x="1070" y="74" font-size="17" fill="#2dff87">SEAL RESULT</text>
+      <text x="735" y="122" font-size="16" fill="#a7fbc3">PASS  env-create-a41f  // verified</text>
+      <text x="735" y="158" font-size="16" fill="#a7fbc3">PASS  path-add-98c2    // verified</text>
+      <text x="735" y="194" font-size="16" fill="#76a989">MANIFEST  transaction.json  // persisted</text>
+      <text x="735" y="230" font-size="16" fill="#76a989">POSTURE   CHECKPOINT / VERIFY / AUTO ROLLBACK</text>
+    </g>
+
+    <text x="74" y="838" font-size="15" fill="#517d61">↑↓ NAVIGATION  //  ENTER SELECT  //  Y/N SAFEGUARD  //  CTRL+C CANCEL</text>
+    <text x="1110" y="838" font-size="15" fill="#2dff87">NEXUS READY</text>
+  </g>
+</svg>
