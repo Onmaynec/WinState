@@ -1,0 +1,94 @@
+name: Фиксация проверки WinState 0.9.0
+
+on:
+  push:
+    branches: [release/verify-result-v0.9.0]
+    paths: [.github/workflows/verify-release-result.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - name: Проверка Release и артефактов
+        shell: pwsh
+        run: |
+          $headers = @{ Accept = 'application/vnd.github+json' }
+          $release = $null
+          for ($attempt = 1; $attempt -le 24; $attempt++) {
+            try {
+              $release = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/Onmaynec/WinState/releases/tags/v0.9.0'
+              break
+            } catch {
+              Start-Sleep -Seconds 15
+            }
+          }
+          if ($null -eq $release) { throw 'Release v0.9.0 не найден.' }
+          $latest = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/Onmaynec/WinState/releases/latest'
+          if ($release.draft -or $release.prerelease) { throw 'Release не является стабильным опубликованным релизом.' }
+          if ($latest.tag_name -ne 'v0.9.0') { throw 'v0.9.0 не является Latest.' }
+          if ($release.name -ne 'WinState 0.9.0 — Снимки состояния и контроль отклонений') {
+            throw 'Название релиза оформлено неверно.'
+          }
+          $expected = @(
+            'WinState-0.9.0-win-x64.zip',
+            'WinState-0.9.0-win-arm64.zip',
+            'WinState-0.9.0-win-x64.zip.sha256',
+            'WinState-0.9.0-win-arm64.zip.sha256',
+            'SHA256SUMS'
+          )
+          $actual = @($release.assets | ForEach-Object { $_.name })
+          foreach ($name in $expected) {
+            if ($actual -notcontains $name) { throw "Отсутствует $name." }
+          }
+          if ($actual.Count -ne 5) { throw "Ожидалось 5 assets, найдено $($actual.Count)." }
+          New-Item verify -ItemType Directory -Force | Out-Null
+          foreach ($asset in $release.assets) {
+            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile (Join-Path verify $asset.name)
+          }
+          $verified = @()
+          foreach ($runtime in @('win-x64', 'win-arm64')) {
+            $zip = Join-Path verify "WinState-0.9.0-$runtime.zip"
+            $sum = "$zip.sha256"
+            $expectedHash = ((Get-Content $sum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+            $actualHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($expectedHash -ne $actualHash) { throw "SHA-256 не совпадает для $runtime." }
+            $extract = Join-Path verify "extract-$runtime"
+            Expand-Archive $zip $extract -Force
+            if (-not (Test-Path (Join-Path $extract 'winstate.exe'))) { throw "Нет winstate.exe для $runtime." }
+            $marker = Get-Content (Join-Path $extract 'winstate.release.json') -Raw | ConvertFrom-Json
+            if ($marker.version -ne '0.9.0' -or $marker.runtime -ne $runtime) {
+              throw "Некорректный marker для $runtime."
+            }
+            $verified += [ordered]@{ runtime = $runtime; sha256 = $actualHash; marker = $true }
+          }
+          $result = [ordered]@{
+            schemaVersion = 1
+            verifiedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+            tag = 'v0.9.0'
+            mergeCommit = 'c4a377051f6b1bae44a22d215ca390faa99d4e09'
+            draft = [bool]$release.draft
+            prerelease = [bool]$release.prerelease
+            latest = ($latest.tag_name -eq 'v0.9.0')
+            releaseName = $release.name
+            assets = $actual
+            archives = $verified
+          }
+          $result | ConvertTo-Json -Depth 8 | Set-Content release-verification-v0.9.0.json -Encoding utf8
+      - name: Сохранение результата проверки
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'release-verification-v0.9.0.json';
+            const content = Buffer.from(fs.readFileSync(path)).toString('base64');
+            await github.rest.repos.createOrUpdateFileContents({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path,
+              message: 'Зафиксировать успешную проверку релиза v0.9.0',
+              content,
+              branch: 'release/verify-result-v0.9.0'
+            });
