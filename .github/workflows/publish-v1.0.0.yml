@@ -1,0 +1,36 @@
+name: Публикация тега v1.0.0
+
+on:
+  push:
+    branches: [release/publish-v1.0.0]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Проверка целевого коммита
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          target='ce21602b0afc1b6393c179dc81a7b5a6ff032745'
+          actual=$(gh api repos/${{ github.repository }}/commits/$target --jq .sha)
+          test "$actual" = "$target"
+      - name: Создание стабильного тега
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          target='ce21602b0afc1b6393c179dc81a7b5a6ff032745'
+          if gh api repos/${{ github.repository }}/git/ref/tags/v1.0.0 >/dev/null 2>&1; then
+            existing=$(gh api repos/${{ github.repository }}/git/ref/tags/v1.0.0 --jq .object.sha)
+            test "$existing" = "$target"
+            echo "Тег v1.0.0 уже указывает на целевой коммит."
+          else
+            gh api --method POST repos/${{ github.repository }}/git/refs \
+              -f ref='refs/tags/v1.0.0' \
+              -f sha="$target"
+          fi
