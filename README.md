@@ -1,5 +1,4 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="WinState — управление Windows и рабочим окружением как кодом" width="100%" />
 </p>
 
 <p align="center">
