@@ -23,7 +23,7 @@ public sealed record ProfileCatalogEntry(
 /// <summary>Композиционный корень и фасад прикладных сценариев WinState.</summary>
 public sealed class WinStateApplication : IAsyncDisposable
 {
-    public const string Version = "0.9.0";
+    public const string Version = "1.0.0";
 
     private readonly ServiceProvider _services;
 
@@ -88,6 +88,8 @@ public sealed class WinStateApplication : IAsyncDisposable
         services.AddSingleton<UnifiedApplyWorkflow>();
         services.AddSingleton<CaptureWorkflow>();
         services.AddSingleton<DriftWorkflow>();
+        services.AddSingleton(_ => new WorkspaceControlWorkflow(options.HomeDirectory));
+        services.AddSingleton(_ => new UpdateBackupRestoreWorkflow(options.HomeDirectory));
         services.AddSingleton<DoctorService>();
         return new WinStateApplication(services.BuildServiceProvider(), options);
     }
@@ -134,6 +136,52 @@ public sealed class WinStateApplication : IAsyncDisposable
                 ReadEnvironment(),
                 reportPath,
                 cancellationToken);
+
+    public Task<WorkspaceValidationReport> ValidateWorkspaceAsync(
+        string manifestPath,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<WorkspaceControlWorkflow>()
+            .ValidateAsync(manifestPath, cancellationToken);
+
+    public Task<WorkspacePlanReport> PlanWorkspaceAsync(
+        string manifestPath,
+        string? reportDirectory,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<WorkspaceControlWorkflow>()
+            .PlanAsync(manifestPath, reportDirectory, cancellationToken);
+
+    public Task<WorkspaceExecutionReport> ApplyWorkspaceAsync(
+        string manifestPath,
+        bool allowPowerShellModules,
+        bool allowDelete,
+        string? reportDirectory,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<WorkspaceControlWorkflow>()
+            .ApplyAsync(
+                manifestPath,
+                allowPowerShellModules,
+                allowDelete,
+                reportDirectory,
+                cancellationToken);
+
+    public Task<WorkspaceRollbackReport> RollbackWorkspaceAsync(
+        string transactionPath,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<WorkspaceControlWorkflow>()
+            .RollbackAsync(transactionPath, cancellationToken);
+
+    public Task<WorkspaceStatusReport> GetWorkspaceStatusAsync(
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<WorkspaceControlWorkflow>()
+            .GetStatusAsync(cancellationToken);
+
+    public Task<UpdateRestorePreparationReport> PrepareUpdateRestoreAsync(
+        string backupDirectory,
+        string? installDirectory,
+        bool launch,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<UpdateBackupRestoreWorkflow>()
+            .PrepareAsync(backupDirectory, installDirectory, launch, cancellationToken);
 
     public Task<EnvironmentStatusReport> GetEnvironmentStatusAsync(
         CancellationToken cancellationToken)
