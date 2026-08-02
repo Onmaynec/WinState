@@ -1,0 +1,29 @@
+name: Снимок статуса публикации v1.0.0
+
+on:
+  push:
+    branches: [release/status-v1.0.0]
+    paths-ignore:
+      - release-status-v1.0.0.json
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Сохранить последние workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api 'repos/${{ github.repository }}/actions/runs?per_page=50' \
+            --jq '{capturedAt:(now|todate),runs:[.workflow_runs[]|select(.name=="Публикация релиза" or .name=="Проверка релиза v1.0.0" or .name=="Публикация тега v1.0.0")|{id,name,event,status,conclusion,head_branch,head_sha,run_number,html_url,created_at,updated_at}]}' \
+            > "$RUNNER_TEMP/release-status-v1.0.0.json"
+          content=$(base64 -w0 "$RUNNER_TEMP/release-status-v1.0.0.json")
+          gh api --method PUT 'repos/${{ github.repository }}/contents/release-status-v1.0.0.json' \
+            -f message='release: зафиксировать статус публикации v1.0.0' \
+            -f content="$content" \
+            -f branch='release/status-v1.0.0'
