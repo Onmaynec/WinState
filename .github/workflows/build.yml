@@ -96,8 +96,9 @@ jobs:
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- workspace rollback $transaction.FullName --yes --home $stateHome
           if ($LASTEXITCODE -ne 0) { throw "Workspace rollback завершился ошибкой." }
           if (Test-Path $managedFile) { throw "Rollback не удалил managed file." }
-          $gitValue = git config --global --get winstate.workspaceProfile
-          if ($LASTEXITCODE -eq 0 -or $gitValue) { throw "Rollback не восстановил Git config." }
+          if ((Test-Path $env:GIT_CONFIG_GLOBAL) -and (Select-String -LiteralPath $env:GIT_CONFIG_GLOBAL -Pattern 'workspaceProfile' -Quiet)) {
+            throw "Rollback не восстановил Git config."
+          }
       - name: Проверка восстановления updater backup
         shell: pwsh
         run: |
