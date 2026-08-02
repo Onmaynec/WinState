@@ -20,7 +20,7 @@ namespace WinState.Core.Profiles
 
         private static readonly HashSet<string> SupportedPathPositions = new(StringComparer.OrdinalIgnoreCase)
         {
-            "prepend", "append"
+            "prepend", "append", "preserve"
         };
 
         private static readonly HashSet<string> SupportedPackageStates = new(StringComparer.OrdinalIgnoreCase)
@@ -101,7 +101,10 @@ namespace WinState.Core.Profiles
 
                 if (!SupportedPathPositions.Contains(entry.Position))
                 {
-                    issues.Add(new("environment.path.position.unsupported", "Поддерживаются позиции prepend и append.", $"{entryPath}.position"));
+                    issues.Add(new(
+                        "environment.path.position.unsupported",
+                        "Поддерживаются позиции prepend, append и preserve.",
+                        $"{entryPath}.position"));
                 }
 
                 index++;
