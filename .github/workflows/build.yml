@@ -33,7 +33,7 @@ jobs:
         run: |
           $version = dotnet run --project src/WinState.Cli --configuration Release --no-build -- --version
           if ($LASTEXITCODE -ne 0) { throw "Команда version завершилась ошибкой." }
-          if ($version -notmatch "0.9.0") { throw "Неожиданная версия WinState: $version" }
+          if ($version -notmatch "1.0.0") { throw "Неожиданная версия WinState: $version" }
       - name: Проверка Profile Engine
         shell: pwsh
         run: |
@@ -59,6 +59,65 @@ jobs:
         run: |
           $stateHome = Join-Path $PWD ".ci-winstate"
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- environment status --home $stateHome
+      - name: Вертикальная проверка Workspace Control
+        shell: pwsh
+        run: |
+          $stateHome = Join-Path $PWD ".ci-workspace"
+          $workspaceRoot = Join-Path $stateHome "manifest"
+          $reports = Join-Path $stateHome "reports"
+          New-Item -ItemType Directory -Path $workspaceRoot -Force | Out-Null
+          Copy-Item -LiteralPath "samples/workspace-control/developer-workspace.json" -Destination (Join-Path $workspaceRoot "workspace.json") -Force
+          $manifest = Join-Path $workspaceRoot "workspace.json"
+          $env:GIT_CONFIG_GLOBAL = Join-Path $stateHome "isolated.gitconfig"
+
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- workspace validate $manifest --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Workspace validation завершилась ошибкой." }
+
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- workspace plan $manifest --report $reports --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Workspace plan завершился ошибкой." }
+
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- workspace apply $manifest --yes --report $reports --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Workspace apply завершился ошибкой." }
+
+          $managedFile = Join-Path $workspaceRoot ".sandbox/tools/workspace.txt"
+          if (-not (Test-Path $managedFile)) { throw "Managed file не создан." }
+          if (-not (Test-Path (Join-Path $stateHome "ownership/workspace.json"))) { throw "Ownership ledger не создан." }
+          if ((Get-ChildItem -LiteralPath $reports -Filter *.json -File).Count -lt 2) { throw "JSON reports не созданы." }
+          if ((Get-ChildItem -LiteralPath $reports -Filter *.md -File).Count -lt 2) { throw "Markdown reports не созданы." }
+
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- workspace plan $manifest --report $reports --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Повторный Workspace plan завершился ошибкой." }
+          $latestPlan = Get-ChildItem -LiteralPath $reports -Filter *workspace-plan*.json -File | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+          $plan = Get-Content -LiteralPath $latestPlan.FullName -Raw | ConvertFrom-Json
+          if ($plan.changes -ne 0) { throw "Workspace не достиг idempotent состояния: $($plan.changes) изменений." }
+
+          $transaction = Get-ChildItem -LiteralPath (Join-Path $stateHome "backups/workspace") -Filter transaction.json -File -Recurse | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+          if (-not $transaction) { throw "Workspace transaction manifest не создан." }
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- workspace rollback $transaction.FullName --yes --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Workspace rollback завершился ошибкой." }
+          if (Test-Path $managedFile) { throw "Rollback не удалил managed file." }
+          $gitValue = git config --global --get winstate.workspaceProfile
+          if ($LASTEXITCODE -eq 0 -or $gitValue) { throw "Rollback не восстановил Git config." }
+      - name: Проверка восстановления updater backup
+        shell: pwsh
+        run: |
+          $stateHome = Join-Path $PWD ".ci-recovery"
+          $backup = Join-Path $stateHome "backup"
+          $install = Join-Path $stateHome "install"
+          New-Item -ItemType Directory -Path $backup,$install,(Join-Path $install "profiles") -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $backup "winstate.exe") -Value "backup" -Encoding utf8
+          Set-Content -LiteralPath (Join-Path $backup "winstate.release.json") -Value '{"version":"0.9.0"}' -Encoding utf8
+          Set-Content -LiteralPath (Join-Path $install "winstate.exe") -Value "current" -Encoding utf8
+          Set-Content -LiteralPath (Join-Path $install "profiles/keep.yaml") -Value "keep" -Encoding utf8
+
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- update prepare-restore $backup --install $install --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Подготовка updater restore завершилась ошибкой." }
+          $script = Get-ChildItem -LiteralPath (Join-Path $stateHome "updates") -Filter restore-update.ps1 -File -Recurse | Select-Object -First 1
+          if (-not $script) { throw "Restore script не создан." }
+          $safetyExe = Get-ChildItem -LiteralPath (Join-Path $stateHome "updates") -Filter winstate.exe -File -Recurse | Where-Object { $_.FullName -match 'current-installation' } | Select-Object -First 1
+          if (-not $safetyExe) { throw "Safety backup текущей установки не создан." }
+          $copiedProfile = Get-ChildItem -LiteralPath (Join-Path $stateHome "updates") -Filter keep.yaml -File -Recurse | Select-Object -First 1
+          if ($copiedProfile) { throw "Пользовательский profiles был ошибочно скопирован в safety backup." }
       - name: Предварительная проверка Windows providers
         if: runner.os == 'Windows'
         shell: pwsh
@@ -121,8 +180,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          .\scripts\package.ps1 -Runtime win-x64 -Version 0.9.0
-          $archive = Join-Path $PWD "artifacts/WinState-0.9.0-win-x64.zip"
+          .\scripts\package.ps1 -Runtime win-x64 -Version 1.0.0
+          $archive = Join-Path $PWD "artifacts/WinState-1.0.0-win-x64.zip"
           $checksum = "$archive.sha256"
           if (-not (Test-Path $archive)) { throw "Релизный ZIP не создан." }
           if (-not (Test-Path $checksum)) { throw "SHA-256 не создан." }
