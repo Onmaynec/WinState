@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Onmaynec/WinState/schemas/workspace.schema.json",
+  "title": "WinState Workspace Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "git": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "state"],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "value": { "type": ["string", "null"] },
+          "state": { "enum": ["present", "absent"] }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "state": { "const": "present" } } },
+            "then": { "required": ["value"] }
+          }
+        ]
+      }
+    },
+    "powerShellModules": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "state"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "minimumVersion": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9]+(?:\\.[0-9]+){1,3}$"
+          },
+          "repository": {
+            "type": "string",
+            "minLength": 1,
+            "default": "PSGallery"
+          },
+          "state": { "enum": ["present", "absent"] }
+        }
+      }
+    },
+    "directories": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "state"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "state": { "enum": ["present", "absent"] }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "state"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "state": { "enum": ["present", "absent"] },
+          "content": { "type": ["string", "null"] },
+          "source": { "type": ["string", "null"] },
+          "encoding": { "const": "utf-8", "default": "utf-8" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "state": { "const": "present" } } },
+            "then": {
+              "oneOf": [
+                { "required": ["content"], "not": { "required": ["source"] } },
+                { "required": ["source"], "not": { "required": ["content"] } }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}
