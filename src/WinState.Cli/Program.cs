@@ -23,7 +23,7 @@ internal static class WinStateCli
         }
         catch (ArgumentException exception)
         {
-            Console.Error.WriteLine($"[ERROR] {exception.Message}");
+            Console.Error.WriteLine($"[ОШИБКА] {exception.Message}");
             return 2;
         }
 
@@ -67,6 +67,8 @@ internal static class WinStateCli
                 "ui" => await UiAsync(application, invocation.Arguments, cancellationToken),
                 "doctor" => await DoctorAsync(application, cancellationToken),
                 "validate" => await ValidateAsync(application, invocation.Arguments, invocation.Variables, cancellationToken),
+                "capture" => await CaptureAsync(application, invocation.Arguments, cancellationToken),
+                "drift" => await DriftAsync(application, invocation.Arguments, invocation.Variables, cancellationToken),
                 "environment" or "env" => await EnvironmentAsync(application, invocation, cancellationToken),
                 "config" => Config(application, invocation.Arguments),
                 "storage" => await StorageAsync(application, invocation.Arguments, cancellationToken),
@@ -75,7 +77,7 @@ internal static class WinStateCli
         }
         catch (OperationCanceledException)
         {
-            Console.Error.WriteLine("[CANCELLED] Операция отменена пользователем.");
+            Console.Error.WriteLine("[ОТМЕНЕНО] Операция отменена пользователем.");
             return 130;
         }
         catch (Exception exception) when (exception is IOException
@@ -85,7 +87,7 @@ internal static class WinStateCli
             or InvalidOperationException
             or PlatformNotSupportedException)
         {
-            Console.Error.WriteLine($"[ERROR] {exception.Message}");
+            Console.Error.WriteLine($"[ОШИБКА] {exception.Message}");
             return 4;
         }
     }
@@ -98,7 +100,7 @@ internal static class WinStateCli
         var demo = arguments.Skip(1).Any(value => value.Equals("--demo", StringComparison.OrdinalIgnoreCase));
         if (!demo && (Console.IsInputRedirected || Console.IsOutputRedirected))
         {
-            Console.Error.WriteLine("[ERROR] Интерактивная панель требует доступный терминал. Для smoke test используйте: winstate ui --demo");
+            Console.Error.WriteLine("[ОШИБКА] Интерактивная панель требует терминал. Для проверки используйте: winstate ui --demo");
             return Task.FromResult(2);
         }
 
@@ -108,20 +110,20 @@ internal static class WinStateCli
     private static async Task<int> DoctorAsync(WinStateApplication application, CancellationToken cancellationToken)
     {
         var report = await application.RunDoctorAsync(cancellationToken);
-        Console.WriteLine("WINSTATE DOCTOR");
-        Console.WriteLine(new string('─', 56));
+        Console.WriteLine("ДИАГНОСТИКА WINSTATE");
+        Console.WriteLine(new string('─', 64));
         foreach (var check in report.Checks)
         {
             var marker = check.Status switch
             {
-                DiagnosticStatus.Ok => "OK",
-                DiagnosticStatus.Warning => "WARN",
-                _ => "FAIL"
+                DiagnosticStatus.Ok => "ГОТОВО",
+                DiagnosticStatus.Warning => "ВНИМАНИЕ",
+                _ => "ОШИБКА"
             };
-            Console.WriteLine($"[{marker,-4}] {check.Name,-18} {check.Message}");
+            Console.WriteLine($"[{marker,-9}] {check.Name,-18} {check.Message}");
         }
 
-        Console.WriteLine(new string('─', 56));
+        Console.WriteLine(new string('─', 64));
         Console.WriteLine(report.IsHealthy ? "Состояние: готово к работе." : "Состояние: обнаружены критические проблемы.");
         return report.IsHealthy ? 0 : 5;
     }
@@ -134,32 +136,133 @@ internal static class WinStateCli
     {
         if (arguments.Count < 2)
         {
-            Console.Error.WriteLine("Использование: winstate validate <profile> [--var name=value]");
+            Console.Error.WriteLine("Использование: winstate validate <профиль> [--var имя=значение]");
             return 2;
         }
 
         var result = await application.ValidateProfileAsync(arguments[1], variables, cancellationToken);
         var profile = result.Loaded.Profile;
-        Console.WriteLine($"Профиль:   {profile.Metadata.Name}");
-        Console.WriteLine($"Schema:    {profile.SchemaVersion}");
-        Console.WriteLine($"Источники: {result.Loaded.SourceFiles.Count}");
-        Console.WriteLine($"Переменные:{result.Loaded.Variables.Count}");
+        Console.WriteLine($"Профиль:             {profile.Metadata.Name}");
+        Console.WriteLine($"Версия схемы:        {profile.SchemaVersion}");
+        Console.WriteLine($"Исходных файлов:     {result.Loaded.SourceFiles.Count}");
+        Console.WriteLine($"Переменных шаблона:  {result.Loaded.Variables.Count}");
         Console.WriteLine($"User environment:    {profile.Environment.User.Count}");
         Console.WriteLine($"Machine environment: {profile.Environment.Machine.Count}");
-        Console.WriteLine($"PATH entries:         {profile.Environment.UserPath.Count + profile.Environment.MachinePath.Count}");
+        Console.WriteLine($"Записей PATH:        {profile.Environment.UserPath.Count + profile.Environment.MachinePath.Count}");
+        Console.WriteLine($"Пакетов:             {profile.Packages.Count}");
+        Console.WriteLine($"Компонентов Windows: {profile.Features.Count}");
 
         if (result.Validation.IsValid)
         {
-            Console.WriteLine("[OK] Профиль загружен, объединён и нормализован.");
+            Console.WriteLine("[ГОТОВО] Профиль загружен, объединён и нормализован.");
             return 0;
         }
 
         foreach (var issue in result.Validation.Issues)
         {
-            Console.Error.WriteLine($"[ERROR] {issue.Path}: {issue.Message} ({issue.Code})");
+            Console.Error.WriteLine($"[ОШИБКА] {issue.Path}: {issue.Message} ({issue.Code})");
         }
 
         return 3;
+    }
+
+    private static async Task<int> CaptureAsync(
+        WinStateApplication application,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        if (arguments.Count < 2)
+        {
+            Console.Error.WriteLine("Использование: winstate capture <снимок.yaml> [название профиля]");
+            return 2;
+        }
+
+        var name = arguments.Count > 2 ? string.Join(' ', arguments.Skip(2)) : null;
+        Console.WriteLine("СОЗДАНИЕ СНИМКА WINSTATE");
+        Console.WriteLine(new string('─', 72));
+        var report = await application.CaptureAsync(arguments[1], name, cancellationToken);
+        Console.WriteLine($"Профиль:             {report.ProfileName}");
+        Console.WriteLine($"YAML:                {report.ProfilePath}");
+        Console.WriteLine($"Манифест:            {report.ManifestPath}");
+        Console.WriteLine($"SHA-256:             {report.Sha256}");
+        Console.WriteLine($"User variables:      {report.Counts.UserVariables}");
+        Console.WriteLine($"Machine variables:   {report.Counts.MachineVariables}");
+        Console.WriteLine($"Записей PATH:        {report.Counts.UserPathEntries + report.Counts.MachinePathEntries}");
+        Console.WriteLine($"Пакетов WinGet:      {report.Counts.Packages}");
+        Console.WriteLine($"Компонентов Windows: {report.Counts.EnabledFeatures}");
+        Console.WriteLine($"Пропущено секретов:  {report.Counts.SkippedSensitiveValues}");
+        foreach (var diagnostic in report.Diagnostics)
+        {
+            Console.WriteLine($"[ВНИМАНИЕ] {diagnostic}");
+        }
+
+        Console.WriteLine("[ГОТОВО] Снимок записан атомарно и снабжён проверяемым манифестом.");
+        return 0;
+    }
+
+    private static async Task<int> DriftAsync(
+        WinStateApplication application,
+        IReadOnlyList<string> arguments,
+        IReadOnlyDictionary<string, string> variables,
+        CancellationToken cancellationToken)
+    {
+        if (arguments.Count < 2)
+        {
+            Console.Error.WriteLine("Использование: winstate drift <профиль.yaml> [отчёт.json]");
+            return 2;
+        }
+
+        var reportPath = arguments.Count > 2 ? arguments[2] : null;
+        var report = await application.CheckDriftAsync(
+            arguments[1],
+            variables,
+            reportPath,
+            cancellationToken);
+        Console.WriteLine("КОНТРОЛЬ ОТКЛОНЕНИЙ WINSTATE");
+        Console.WriteLine(new string('─', 88));
+        Console.WriteLine($"Профиль:           {report.ProfileName}");
+        Console.WriteLine($"Проверен:          {report.CheckedAt:O}");
+        Console.WriteLine($"Валидный:          {report.IsValid}");
+        Console.WriteLine($"Поддерживается:    {report.IsSupported}");
+        Console.WriteLine($"Изменений:         {report.Changes}");
+        Console.WriteLine($"Опасных изменений: {report.DestructiveChanges}");
+        Console.WriteLine($"Максимальный риск: {report.MaximumRisk}");
+        if (report.ReportPath is not null)
+        {
+            Console.WriteLine($"JSON-отчёт:        {report.ReportPath}");
+        }
+
+        foreach (var diagnostic in report.Diagnostics)
+        {
+            Console.WriteLine($"[ДИАГНОСТИКА] {diagnostic}");
+        }
+
+        foreach (var action in report.Actions)
+        {
+            Console.WriteLine($"[{action.Risk,-8}] {action.ProviderId,-24} {action.Operation,-10} {action.Resource}");
+            Console.WriteLine($"           {action.Explanation}");
+        }
+
+        if (!report.IsValid)
+        {
+            Console.Error.WriteLine("[ОШИБКА] Профиль не прошёл проверку.");
+            return 3;
+        }
+
+        if (!report.IsSupported)
+        {
+            Console.Error.WriteLine("[ОШИБКА] Один или несколько провайдеров недоступны.");
+            return 6;
+        }
+
+        if (report.HasDrift)
+        {
+            Console.WriteLine("[ОТКЛОНЕНИЕ] Текущее состояние отличается от профиля.");
+            return 10;
+        }
+
+        Console.WriteLine("[ГОТОВО] Отклонения не обнаружены.");
+        return 0;
     }
 
     private static async Task<int> EnvironmentAsync(
@@ -172,16 +275,16 @@ internal static class WinStateCli
         if (subcommand == "status")
         {
             var status = await application.GetEnvironmentStatusAsync(cancellationToken);
-            Console.WriteLine("WINSTATE ENVIRONMENT PROVIDER");
+            Console.WriteLine("ПРОВАЙДЕР ОКРУЖЕНИЯ WINSTATE");
             Console.WriteLine(new string('─', 64));
-            Console.WriteLine($"Platform support: {(status.IsSupported ? "YES" : "NO")}");
-            Console.WriteLine($"User variables:   {status.UserVariables}");
-            Console.WriteLine($"Machine variables:{status.MachineVariables}");
-            Console.WriteLine($"User PATH entries:{status.UserPathEntries}");
-            Console.WriteLine($"Machine PATH:     {status.MachinePathEntries}");
+            Console.WriteLine($"Поддерживается:      {(status.IsSupported ? "ДА" : "НЕТ")}");
+            Console.WriteLine($"User variables:      {status.UserVariables}");
+            Console.WriteLine($"Machine variables:   {status.MachineVariables}");
+            Console.WriteLine($"User PATH entries:   {status.UserPathEntries}");
+            Console.WriteLine($"Machine PATH entries:{status.MachinePathEntries}");
             foreach (var diagnostic in status.Diagnostics)
             {
-                Console.WriteLine($"[{(diagnostic.IsWarning ? "WARN" : "INFO")}] {diagnostic.Message}");
+                Console.WriteLine($"[{(diagnostic.IsWarning ? "ВНИМАНИЕ" : "ИНФО")}] {diagnostic.Message}");
             }
 
             return 0;
@@ -192,7 +295,7 @@ internal static class WinStateCli
             var checkpoints = await application.ListEnvironmentCheckpointsAsync(cancellationToken);
             if (checkpoints.Count == 0)
             {
-                Console.WriteLine("Environment checkpoints не найдены.");
+                Console.WriteLine("Контрольные точки окружения не найдены.");
                 return 0;
             }
 
@@ -211,13 +314,13 @@ internal static class WinStateCli
         {
             if (arguments.Count < 3)
             {
-                Console.Error.WriteLine("Использование: winstate environment rollback <manifest|directory> --yes");
+                Console.Error.WriteLine("Использование: winstate environment rollback <манифест|каталог> --yes");
                 return 2;
             }
 
             if (!invocation.AssumeYes)
             {
-                Console.Error.WriteLine("[SAFEGUARD] Rollback требует явный флаг --yes.");
+                Console.Error.WriteLine("[ЗАЩИТА] Откат требует явный флаг --yes.");
                 return 2;
             }
 
@@ -229,13 +332,13 @@ internal static class WinStateCli
         if (subcommand is not ("plan" or "apply"))
         {
             Console.Error.WriteLine(
-                "Использование: winstate environment [status|plan <profile>|apply <profile> --yes|checkpoints|rollback <checkpoint> --yes]");
+                "Использование: winstate environment [status|plan <профиль>|apply <профиль> --yes|checkpoints|rollback <точка> --yes]");
             return 2;
         }
 
         if (arguments.Count < 3)
         {
-            Console.Error.WriteLine($"Использование: winstate environment {subcommand} <profile>");
+            Console.Error.WriteLine($"Использование: winstate environment {subcommand} <профиль>");
             return 2;
         }
 
@@ -261,7 +364,7 @@ internal static class WinStateCli
 
         if (!invocation.AssumeYes)
         {
-            Console.Error.WriteLine("[SAFEGUARD] Apply требует явный флаг --yes после просмотра плана.");
+            Console.Error.WriteLine("[ЗАЩИТА] Применение требует --yes после просмотра плана.");
             return 2;
         }
 
@@ -269,7 +372,7 @@ internal static class WinStateCli
         if (hasMachineActions && !invocation.AllowMachine)
         {
             Console.Error.WriteLine(
-                "[SAFEGUARD] План содержит Machine scope. Добавьте --allow-machine и запустите терминал от администратора.");
+                "[ЗАЩИТА] План содержит Machine scope. Добавьте --allow-machine и запустите терминал от администратора.");
             return 2;
         }
 
@@ -285,21 +388,21 @@ internal static class WinStateCli
 
     private static void PrintEnvironmentPlan(EnvironmentPlanReport plan)
     {
-        Console.WriteLine("WINSTATE ENVIRONMENT PLAN");
+        Console.WriteLine("ПЛАН ИЗМЕНЕНИЯ ОКРУЖЕНИЯ");
         Console.WriteLine(new string('─', 80));
-        Console.WriteLine($"Профиль:     {plan.Loaded.Profile.Metadata.Name}");
-        Console.WriteLine($"Поддержка:   {(plan.IsSupported ? "Windows provider ready" : "unsupported platform")}");
-        Console.WriteLine($"Изменения:   {plan.Summary.Changes}");
-        Console.WriteLine($"Machine:     {plan.Summary.AdministratorActions}");
-        Console.WriteLine($"Max risk:    {plan.Summary.MaximumRisk}");
+        Console.WriteLine($"Профиль:          {plan.Loaded.Profile.Metadata.Name}");
+        Console.WriteLine($"Поддерживается:   {plan.IsSupported}");
+        Console.WriteLine($"Изменений:        {plan.Summary.Changes}");
+        Console.WriteLine($"Machine actions:  {plan.Summary.AdministratorActions}");
+        Console.WriteLine($"Максимальный риск:{plan.Summary.MaximumRisk}");
         foreach (var issue in plan.Validation.Issues)
         {
-            Console.WriteLine($"[ERROR] {issue.Path}: {issue.Message}");
+            Console.WriteLine($"[ОШИБКА] {issue.Path}: {issue.Message}");
         }
 
         foreach (var diagnostic in plan.Diagnostics)
         {
-            Console.WriteLine($"[{(diagnostic.IsWarning ? "WARN" : "INFO")}] {diagnostic.Message}");
+            Console.WriteLine($"[{(diagnostic.IsWarning ? "ВНИМАНИЕ" : "ИНФО")}] {diagnostic.Message}");
         }
 
         foreach (var action in plan.Actions)
@@ -308,26 +411,25 @@ internal static class WinStateCli
             var resource = action.Resource.ResourceType.EndsWith("variable", StringComparison.Ordinal)
                 ? Property(action, "name")
                 : Property(action, "path");
-            Console.WriteLine(
-                $"[{action.Risk,-6}] {scope,-7} {action.Operation,-8} {resource}");
+            Console.WriteLine($"[{action.Risk,-6}] {scope,-7} {action.Operation,-8} {resource}");
             Console.WriteLine($"         {action.Explanation}");
         }
 
         if (plan.Actions.Count == 0 && plan.Validation.IsValid && plan.IsSupported)
         {
-            Console.WriteLine("[OK] Изменения не требуются.");
+            Console.WriteLine("[ГОТОВО] Изменения не требуются.");
         }
     }
 
     private static void PrintExecution(EnvironmentExecutionReport result)
     {
         Console.WriteLine(new string('─', 80));
-        Console.WriteLine($"Transaction: {result.TransactionId}");
-        Console.WriteLine($"Profile:     {result.ProfileName}");
-        Console.WriteLine($"Succeeded:   {result.Succeeded}");
-        Console.WriteLine($"Verified:    {result.Verified}");
-        Console.WriteLine($"Rolled back: {result.RolledBack}");
-        Console.WriteLine($"Checkpoint:  {result.CheckpointManifest ?? "none"}");
+        Console.WriteLine($"Транзакция:       {result.TransactionId}");
+        Console.WriteLine($"Профиль:          {result.ProfileName}");
+        Console.WriteLine($"Успешно:          {result.Succeeded}");
+        Console.WriteLine($"Проверено:        {result.Verified}");
+        Console.WriteLine($"Выполнен откат:   {result.RolledBack}");
+        Console.WriteLine($"Контрольная точка:{result.CheckpointManifest ?? "нет"}");
         foreach (var action in result.Actions)
         {
             Console.WriteLine($"[{action.Status}] {action.ActionId}: {action.Message}");
@@ -356,13 +458,13 @@ internal static class WinStateCli
             return 2;
         }
 
-        Console.WriteLine($"Home:      {application.Options.HomeDirectory}");
-        Console.WriteLine($"Profiles:  {application.Options.ProfilesDirectory}");
-        Console.WriteLine($"Database:  {application.Options.DatabasePath}");
-        Console.WriteLine($"Logs:      {application.Options.LogsDirectory}");
-        Console.WriteLine($"Config:    {application.Options.ConfigPath}");
-        Console.WriteLine($"Portable:  {application.Options.PortableMode}");
-        Console.WriteLine($"Log level: {application.Options.MinimumLogLevel}");
+        Console.WriteLine($"Домашний каталог: {application.Options.HomeDirectory}");
+        Console.WriteLine($"Профили:          {application.Options.ProfilesDirectory}");
+        Console.WriteLine($"База данных:      {application.Options.DatabasePath}");
+        Console.WriteLine($"Журналы:          {application.Options.LogsDirectory}");
+        Console.WriteLine($"Конфигурация:     {application.Options.ConfigPath}");
+        Console.WriteLine($"Переносной режим: {application.Options.PortableMode}");
+        Console.WriteLine($"Уровень журнала:  {application.Options.MinimumLogLevel}");
         return 0;
     }
 
@@ -380,16 +482,16 @@ internal static class WinStateCli
 
         await application.InitializeStorageAsync(cancellationToken);
         var status = await application.GetStorageStatusAsync(cancellationToken);
-        Console.WriteLine($"Database:   {status.DatabasePath}");
-        Console.WriteLine($"Migrations: {status.AppliedMigrations}");
-        Console.WriteLine($"Schema:     {status.LatestMigrationVersion}");
-        Console.WriteLine($"Size:       {status.DatabaseSizeBytes} bytes");
+        Console.WriteLine($"База данных: {status.DatabasePath}");
+        Console.WriteLine($"Миграций:    {status.AppliedMigrations}");
+        Console.WriteLine($"Схема:       {status.LatestMigrationVersion}");
+        Console.WriteLine($"Размер:      {status.DatabaseSizeBytes} байт");
         return 0;
     }
 
     private static int Unknown(string command)
     {
-        Console.Error.WriteLine($"[ERROR] Неизвестная команда: {command}");
+        Console.Error.WriteLine($"[ОШИБКА] Неизвестная команда: {command}");
         Console.Error.WriteLine("Выполните: winstate --help");
         return 2;
     }
@@ -398,37 +500,37 @@ internal static class WinStateCli
     {
         Console.WriteLine("""
         WINSTATE
-        Git для конфигурации Windows.
-
-        Без аргументов запускается интерактивный Control Center.
+        Управление конфигурацией Windows как кодом.
 
         Команды:
-          winstate                               Открыть панель со стрелочным управлением
-          winstate ui [--demo]                   Открыть панель / вывести CI-превью
-          winstate --help                        Показать справку
-          winstate --version                     Показать версию
-          winstate architecture                  Показать границы модулей
-          winstate doctor [--home <path>]        Проверить конфигурацию и SQLite
-          winstate validate <profile>            Загрузить и проверить полный YAML
-                    [--var name=value]            Переопределить переменную профиля
-          winstate environment status            Показать состояние Environment Provider
-          winstate environment plan <profile>    Построить безопасный execution plan
-          winstate environment apply <profile>   Применить после просмотра плана
-                    --yes [--allow-machine]       Явное подтверждение scope
-          winstate environment checkpoints       Показать доступные checkpoint
-          winstate environment rollback <path>   Восстановить checkpoint с --yes
-          winstate config [show|path]            Показать вычисленные настройки
-          winstate storage [migrate|status]      Управлять локальной схемой SQLite
+          winstate                                  Открыть интерактивную панель
+          winstate ui [--demo]                      Открыть панель или вывести CI-превью
+          winstate --help                           Показать справку
+          winstate --version                        Показать версию
+          winstate architecture                     Показать границы модулей
+          winstate doctor [--home <путь>]           Проверить конфигурацию и SQLite
+          winstate validate <профиль>               Проверить полный YAML-профиль
+          winstate capture <снимок.yaml> [название] Создать безопасный снимок системы
+          winstate drift <профиль> [отчёт.json]     Найти отклонения без изменений системы
+          winstate environment status               Показать состояние Environment Provider
+          winstate environment plan <профиль>       Построить безопасный план
+          winstate environment apply <профиль>      Применить план с --yes
+          winstate environment checkpoints          Показать контрольные точки
+          winstate environment rollback <путь>      Выполнить откат с --yes
+          winstate config [show|path]               Показать вычисленные настройки
+          winstate storage [migrate|status]         Управлять локальной схемой SQLite
 
-        Безопасность apply:
-          --yes               подтверждает применение показанного плана
-          --allow-machine     разрешает Machine scope (нужен запуск от администратора)
-          --no-auto-rollback  отключает автоматический откат при ошибке
+        Коды drift:
+          0   отклонений нет
+          10  обнаружены отклонения
+          3   профиль невалиден
+          6   провайдер недоступен
 
-        Управление панелью:
-          ↑ / ↓     перемещение
-          ENTER     открыть выбранный раздел
-          любая клавиша — вернуться в главное меню
+        Безопасность:
+          Capture пропускает переменные с признаками паролей, токенов и секретов.
+          Drift выполняет только discovery и plan — система не изменяется.
+          --yes подтверждает применение уже показанного плана.
+          --allow-machine разрешает Machine scope от имени администратора.
         """);
     }
 
@@ -437,15 +539,14 @@ internal static class WinStateCli
         Console.WriteLine("""
         Terminal UI → App workflows → Core engines → Provider contracts
                           │                │                 │
-                          ├─ Infrastructure└─ Profile Engine └─ Environment Provider
-                          └─ SQLite Storage + transaction history
+                          ├─ Capture/Drift ├─ Profile Engine ├─ Environment
+                          ├─ Infrastructure└─ Apply Engine   ├─ WinGet / DISM
+                          └─ SQLite Storage                  └─ Windows System
 
-        Terminal:       панели, меню, подтверждения и анимации
-        App:            DI, plan/checkpoint/apply/verify/rollback orchestration
-        Core:           Profile Engine, validation и dependency graph
-        Environment:    User/Machine variables и PATH
-        Storage:        SQLite, action results и backup references
-        Domain:         модели, risks и provider contracts
+        Capture:        атомарный YAML + JSON-манифест + SHA-256
+        Drift:          discovery → plan → JSON-отчёт, без применения
+        Apply Engine:   policy gates, checkpoints, verification и rollback
+        Storage:        SQLite, результаты действий и backup references
         """);
     }
 
@@ -482,14 +583,14 @@ internal static class WinStateCli
                 {
                     if (index + 1 >= args.Count)
                     {
-                        throw new ArgumentException("После --var необходимо указать name=value.");
+                        throw new ArgumentException("После --var необходимо указать имя=значение.");
                     }
 
                     var assignment = args[++index];
                     var separator = assignment.IndexOf('=');
                     if (separator <= 0)
                     {
-                        throw new ArgumentException($"Некорректная переменная '{assignment}'. Используйте name=value.");
+                        throw new ArgumentException($"Некорректная переменная '{assignment}'. Используйте имя=значение.");
                     }
 
                     variables[assignment[..separator].Trim()] = assignment[(separator + 1)..];
