@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using WinState.App;
 using WinState.App.Diagnostics;
 using WinState.Terminal;
@@ -69,6 +70,8 @@ internal static class WinStateCli
                 "validate" => await ValidateAsync(application, invocation.Arguments, invocation.Variables, cancellationToken),
                 "capture" => await CaptureAsync(application, invocation.Arguments, cancellationToken),
                 "drift" => await DriftAsync(application, invocation.Arguments, invocation.Variables, cancellationToken),
+                "workspace" => await WorkspaceAsync(application, invocation, cancellationToken),
+                "update" => await UpdateAsync(application, invocation, cancellationToken),
                 "environment" or "env" => await EnvironmentAsync(application, invocation, cancellationToken),
                 "config" => Config(application, invocation.Arguments),
                 "storage" => await StorageAsync(application, invocation.Arguments, cancellationToken),
@@ -85,7 +88,8 @@ internal static class WinStateCli
             or ArgumentException
             or InvalidDataException
             or InvalidOperationException
-            or PlatformNotSupportedException)
+            or PlatformNotSupportedException
+            or JsonException)
         {
             Console.Error.WriteLine($"[ОШИБКА] {exception.Message}");
             return 4;
@@ -263,6 +267,226 @@ internal static class WinStateCli
 
         Console.WriteLine("[ГОТОВО] Отклонения не обнаружены.");
         return 0;
+    }
+
+    private static async Task<int> WorkspaceAsync(
+        WinStateApplication application,
+        CliInvocation invocation,
+        CancellationToken cancellationToken)
+    {
+        var arguments = invocation.Arguments;
+        var subcommand = arguments.Count > 1 ? arguments[1].ToLowerInvariant() : "status";
+        if (subcommand == "status")
+        {
+            var status = await application.GetWorkspaceStatusAsync(cancellationToken);
+            Console.WriteLine("WORKSPACE CONTROL WINSTATE");
+            Console.WriteLine(new string('─', 72));
+            Console.WriteLine($"Ownership ledger: {status.OwnershipPath}");
+            Console.WriteLine($"Git settings:     {status.OwnedGitSettings}");
+            Console.WriteLine($"PowerShell modules:{status.OwnedModules}");
+            Console.WriteLine($"Managed files:    {status.OwnedFiles}");
+            Console.WriteLine($"Managed folders:  {status.OwnedDirectories}");
+            Console.WriteLine($"Последняя транзакция: {status.LatestTransactionPath ?? "нет"}");
+            return 0;
+        }
+
+        if (subcommand == "rollback")
+        {
+            if (arguments.Count < 3)
+            {
+                Console.Error.WriteLine("Использование: winstate workspace rollback <transaction.json> --yes");
+                return 2;
+            }
+
+            if (!invocation.AssumeYes)
+            {
+                Console.Error.WriteLine("[ЗАЩИТА] Workspace rollback требует явный флаг --yes.");
+                return 2;
+            }
+
+            var result = await application.RollbackWorkspaceAsync(arguments[2], cancellationToken);
+            Console.WriteLine($"Транзакция: {result.TransactionId}");
+            Console.WriteLine($"Успешно:    {result.Succeeded}");
+            Console.WriteLine($"Восстановлено: {result.RestoredActions}");
+            Console.WriteLine($"Пропущено:     {result.SkippedActions}");
+            foreach (var message in result.Messages)
+            {
+                Console.WriteLine(message);
+            }
+
+            return result.Succeeded ? 0 : 7;
+        }
+
+        if (subcommand is not ("validate" or "plan" or "apply"))
+        {
+            Console.Error.WriteLine(
+                "Использование: winstate workspace [status|validate <manifest>|plan <manifest>|apply <manifest> --yes|rollback <transaction> --yes]");
+            return 2;
+        }
+
+        if (arguments.Count < 3)
+        {
+            Console.Error.WriteLine($"Использование: winstate workspace {subcommand} <manifest.json>");
+            return 2;
+        }
+
+        var manifestPath = arguments[2];
+        if (subcommand == "validate")
+        {
+            var validation = await application.ValidateWorkspaceAsync(manifestPath, cancellationToken);
+            Console.WriteLine($"Workspace: {validation.Name}");
+            Console.WriteLine($"Manifest:  {validation.ManifestPath}");
+            foreach (var issue in validation.Issues)
+            {
+                Console.WriteLine($"[ОШИБКА] {issue}");
+            }
+
+            Console.WriteLine(validation.IsValid
+                ? "[ГОТОВО] Workspace manifest валиден."
+                : "[ОШИБКА] Workspace manifest содержит ошибки.");
+            return validation.IsValid ? 0 : 3;
+        }
+
+        var reportDirectory = OptionValue(arguments, "--report");
+        if (subcommand == "plan")
+        {
+            var plan = await application.PlanWorkspaceAsync(
+                manifestPath,
+                reportDirectory,
+                cancellationToken);
+            PrintWorkspacePlan(plan);
+            if (!plan.IsValid)
+            {
+                return 3;
+            }
+
+            if (!plan.IsSupported)
+            {
+                return 6;
+            }
+
+            return plan.Actions.Any(action => action.Blocked) ? 8 : 0;
+        }
+
+        if (!invocation.AssumeYes)
+        {
+            Console.Error.WriteLine("[ЗАЩИТА] Workspace apply требует --yes после просмотра плана.");
+            return 2;
+        }
+
+        var execution = await application.ApplyWorkspaceAsync(
+            manifestPath,
+            HasFlag(arguments, "--allow-modules"),
+            HasFlag(arguments, "--allow-delete"),
+            reportDirectory,
+            cancellationToken);
+        Console.WriteLine("ПРИМЕНЕНИЕ WORKSPACE CONTROL");
+        Console.WriteLine(new string('─', 88));
+        Console.WriteLine($"Транзакция: {execution.TransactionId}");
+        Console.WriteLine($"Успешно:    {execution.Succeeded}");
+        Console.WriteLine($"Откат:      {execution.RolledBack}");
+        Console.WriteLine($"Применено:  {execution.AppliedActions}");
+        Console.WriteLine($"Ошибок:     {execution.FailedActions}");
+        Console.WriteLine($"Manifest транзакции: {execution.TransactionPath}");
+        Console.WriteLine($"JSON-отчёт: {execution.JsonReportPath}");
+        Console.WriteLine($"Markdown:   {execution.MarkdownReportPath}");
+        foreach (var message in execution.Messages)
+        {
+            Console.WriteLine(message);
+        }
+
+        return execution.Succeeded ? 0 : 7;
+    }
+
+    private static void PrintWorkspacePlan(WorkspacePlanReport plan)
+    {
+        Console.WriteLine("ПЛАН WORKSPACE CONTROL");
+        Console.WriteLine(new string('─', 88));
+        Console.WriteLine($"Workspace:          {plan.Name}");
+        Console.WriteLine($"Manifest:           {plan.ManifestPath}");
+        Console.WriteLine($"Валидный:           {plan.IsValid}");
+        Console.WriteLine($"Providers доступны: {plan.IsSupported}");
+        Console.WriteLine($"Изменений:          {plan.Changes}");
+        Console.WriteLine($"Удалений:           {plan.DestructiveChanges}");
+        Console.WriteLine($"Необратимых:        {plan.IrreversibleChanges}");
+        Console.WriteLine($"JSON-отчёт:         {plan.JsonReportPath}");
+        Console.WriteLine($"Markdown:           {plan.MarkdownReportPath}");
+        foreach (var diagnostic in plan.Diagnostics)
+        {
+            Console.WriteLine($"[ДИАГНОСТИКА] {diagnostic}");
+        }
+
+        foreach (var action in plan.Actions)
+        {
+            var marker = action.Blocked ? "БЛОК" : action.Risk;
+            Console.WriteLine($"[{marker,-8}] {action.Provider,-20} {action.Operation,-18} {action.Resource}");
+            Console.WriteLine($"           {action.Explanation}");
+        }
+
+        if (plan.Actions.Count == 0 && plan.IsValid && plan.IsSupported)
+        {
+            Console.WriteLine("[ГОТОВО] Workspace уже соответствует manifest.");
+        }
+    }
+
+    private static async Task<int> UpdateAsync(
+        WinStateApplication application,
+        CliInvocation invocation,
+        CancellationToken cancellationToken)
+    {
+        var arguments = invocation.Arguments;
+        var subcommand = arguments.Count > 1 ? arguments[1].ToLowerInvariant() : string.Empty;
+        if (subcommand is not ("restore" or "prepare-restore") || arguments.Count < 3)
+        {
+            Console.Error.WriteLine(
+                "Использование: winstate update restore <backup-directory> --yes [--install <directory>]");
+            return 2;
+        }
+
+        var launch = subcommand == "restore";
+        if (launch && !invocation.AssumeYes)
+        {
+            Console.Error.WriteLine("[ЗАЩИТА] Восстановление updater backup требует --yes.");
+            return 2;
+        }
+
+        var result = await application.PrepareUpdateRestoreAsync(
+            arguments[2],
+            OptionValue(arguments, "--install"),
+            launch,
+            cancellationToken);
+        Console.WriteLine("ВОССТАНОВЛЕНИЕ ОБНОВЛЕНИЯ WINSTATE");
+        Console.WriteLine(new string('─', 72));
+        Console.WriteLine($"Backup:          {result.BackupDirectory}");
+        Console.WriteLine($"Установка:       {result.InstallDirectory}");
+        Console.WriteLine($"Safety backup:   {result.SafetyBackupDirectory}");
+        Console.WriteLine($"Restore script:  {result.ScriptPath}");
+        Console.WriteLine($"Запланировано:   {result.Scheduled}");
+        Console.WriteLine(result.Message);
+        return 0;
+    }
+
+    private static bool HasFlag(IReadOnlyList<string> arguments, string flag)
+        => arguments.Any(value => value.Equals(flag, StringComparison.OrdinalIgnoreCase));
+
+    private static string? OptionValue(IReadOnlyList<string> arguments, string option)
+    {
+        for (var index = 0; index < arguments.Count; index++)
+        {
+            if (!arguments[index].Equals(option, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (index + 1 >= arguments.Count || arguments[index + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                throw new ArgumentException($"После {option} необходимо указать значение.");
+            }
+
+            return arguments[index + 1];
+        }
+
+        return null;
     }
 
     private static async Task<int> EnvironmentAsync(
@@ -499,10 +723,10 @@ internal static class WinStateCli
     private static void PrintHelp()
     {
         Console.WriteLine("""
-        WINSTATE
-        Управление конфигурацией Windows как кодом.
+        WINSTATE 1.0
+        Управление конфигурацией Windows и рабочего окружения как кодом.
 
-        Команды:
+        Основные команды:
           winstate                                  Открыть интерактивную панель
           winstate ui [--demo]                      Открыть панель или вывести CI-превью
           winstate --help                           Показать справку
@@ -512,25 +736,33 @@ internal static class WinStateCli
           winstate validate <профиль>               Проверить полный YAML-профиль
           winstate capture <снимок.yaml> [название] Создать безопасный снимок системы
           winstate drift <профиль> [отчёт.json]     Найти отклонения без изменений системы
+
+        Workspace Control:
+          winstate workspace status                 Показать ownership и последнюю транзакцию
+          winstate workspace validate <manifest>    Проверить JSON manifest
+          winstate workspace plan <manifest>        Построить план и JSON/Markdown-отчёт
+                    [--report <каталог>]
+          winstate workspace apply <manifest>       Применить после просмотра плана
+                    --yes [--allow-modules] [--allow-delete]
+          winstate workspace rollback <transaction> Восстановить обратимые действия с --yes
+
+        Система и восстановление:
           winstate environment status               Показать состояние Environment Provider
           winstate environment plan <профиль>       Построить безопасный план
           winstate environment apply <профиль>      Применить план с --yes
           winstate environment checkpoints          Показать контрольные точки
           winstate environment rollback <путь>      Выполнить откат с --yes
+          winstate update restore <backup>           Восстановить updater backup с --yes
+                    [--install <каталог>]
           winstate config [show|path]               Показать вычисленные настройки
           winstate storage [migrate|status]         Управлять локальной схемой SQLite
 
-        Коды drift:
-          0   отклонений нет
-          10  обнаружены отклонения
-          3   профиль невалиден
-          6   провайдер недоступен
-
-        Безопасность:
-          Capture пропускает переменные с признаками паролей, токенов и секретов.
-          Drift выполняет только discovery и plan — система не изменяется.
-          --yes подтверждает применение уже показанного плана.
-          --allow-machine разрешает Machine scope от имени администратора.
+        Безопасность Workspace Control:
+          Удаляются только ресурсы, записанные в ownership ledger WinState.
+          Непустые каталоги и PowerShell modules автоматически не удаляются.
+          --allow-modules отдельно разрешает Install-Module для CurrentUser.
+          --allow-delete отдельно разрешает управляемые удаления.
+          Перед каждой заменой файла и настройкой Git создаётся backup.
         """);
     }
 
@@ -540,13 +772,14 @@ internal static class WinStateCli
         Terminal UI → App workflows → Core engines → Provider contracts
                           │                │                 │
                           ├─ Capture/Drift ├─ Profile Engine ├─ Environment
-                          ├─ Infrastructure└─ Apply Engine   ├─ WinGet / DISM
-                          └─ SQLite Storage                  └─ Windows System
+                          ├─ Workspace     ├─ Apply Engine   ├─ WinGet / DISM
+                          ├─ Recovery      └─ Ownership      ├─ Windows System
+                          └─ SQLite Storage                  └─ Git / PS / Files
 
-        Capture:        атомарный YAML + JSON-манифест + SHA-256
-        Drift:          discovery → plan → JSON-отчёт, без применения
-        Apply Engine:   policy gates, checkpoints, verification и rollback
-        Storage:        SQLite, результаты действий и backup references
+        Workspace:      plan → ownership gate → checkpoint → apply → report → rollback
+        Ownership:      versioned JSON ledger с migration compatibility
+        Reports:        атомарные JSON и Markdown для plan/apply
+        Recovery:       safety backup и отложенное восстановление updater backup
         """);
     }
 

@@ -35,29 +35,41 @@
 
 ## ✅ Этап 9 — Capture и Drift (`0.9.0`)
 
-- стабильный релиз без prerelease-суффикса;
+- первый стабильный релиз без prerelease-суффикса;
 - безопасный экспорт текущего состояния в YAML;
 - JSON-манифест снимка и SHA-256;
-- экспорт environment, PATH, WinGet packages и enabled Optional Features;
+- environment, PATH, WinGet packages и enabled Optional Features;
 - фильтрация потенциальных секретов;
 - read-only drift scan через Unified Apply Plan;
-- JSON-отчёт действий, рисков, admin requirements и rollback capability;
-- стабильные exit codes для CI;
-- Windows vertical slice `capture → validate → drift`;
-- русская CLI-справка, документация и GitHub Release notes;
-- стабильные релизы автоматически помечаются `Latest`.
+- стабильные exit codes и Windows vertical slice;
+- русская CLI, документация и GitHub Release notes;
+- stable releases автоматически становятся `Latest`.
 
-Git configuration, PowerShell modules и managed files/directories перенесены в следующий этап, чтобы не смешивать их с первым стабильным наблюдаемым циклом Capture/Drift.
+## ✅ Этап 10 — Workspace Control и Recovery (`1.0.0`)
 
-## ⏭️ Этап 10 — WinState 1.0
-
-- Git configuration provider;
-- PowerShell modules provider;
-- managed files and directories;
-- persistent ownership store;
+- Git global configuration provider;
+- PowerShell modules provider для `CurrentUser`;
+- managed UTF-8 files и directories;
+- JSON Workspace manifest schema version 1;
+- persistent versioned ownership ledger;
+- блокировка удаления неизвестных ресурсов;
+- отдельные gates для module install и deletion;
+- persisted plan/apply transactions;
+- automatic и manual rollback;
+- JSON и Markdown reports;
+- updater backup restore с safety backup;
+- сохранение `.winstate`, `profiles` и `logs` при recovery;
 - migration compatibility policy;
-- updater backup restore command;
-- Markdown reports;
-- Authenticode signing;
-- локализация UI без смешения языков;
-- стабильный `1.0` release pipeline.
+- Ubuntu/Windows Workspace vertical slice;
+- условный Authenticode signing stage;
+- stable `1.0.0` release pipeline.
+
+## Следующие направления после 1.0
+
+- YAML-представление Workspace manifest;
+- расширенная работа с PowerShell repositories и offline module cache;
+- managed file templates с безопасным secret injection;
+- signed provenance/SBOM для release assets;
+- расширение UI разделом Workspace Control;
+- remote fleet inventory и централизованные drift reports;
+- дополнительные Windows providers без ослабления ownership/risk gates.

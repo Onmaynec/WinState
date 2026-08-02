@@ -2,6 +2,67 @@
 
 Все заметные изменения WinState документируются в этом файле.
 
+## [1.0.0] — 2026-08-02
+
+### Добавлено
+
+- Workspace Control для управления пользовательским рабочим окружением как кодом;
+- JSON manifest schema version 1;
+- global Git configuration provider;
+- PowerShell modules provider со scope `CurrentUser`;
+- managed UTF-8 files из встроенного `content` или локального `source`;
+- managed directories;
+- versioned persistent ownership ledger;
+- deterministic Workspace plan с risks, destructive/irreversible flags и explanations;
+- независимые policy gates `--allow-modules` и `--allow-delete`;
+- persisted transaction manifest после каждого действия;
+- automatic rollback обратимых действий при ошибке;
+- manual Workspace rollback;
+- JSON и Markdown reports для plan/apply;
+- updater backup restore с safety backup текущей установки;
+- команда `update prepare-restore` для безопасной проверки recovery;
+- сохранение `.winstate`, `profiles` и `logs` при restore;
+- migration compatibility policy;
+- настоящий Ubuntu/Windows Workspace vertical slice;
+- unit-тесты apply/rollback, ownership guard и updater restore;
+- условный Authenticode signing stage в stable release pipeline;
+- поле `authenticodeSigned` в release marker;
+- русские руководства `WORKSPACE_CONTROL.md` и `MIGRATION_POLICY.md`;
+- русские release notes `docs/releases/v1.0.0.md`.
+
+### Изменено
+
+- версия приложения и CLI обновлена до `1.0.0`;
+- CLI help и architecture map обновлены под Workspace Control и Recovery;
+- README переработан для первого major stable release;
+- package smoke test использует версию `1.0.0`;
+- release workflow проверяет marker обоих runtimes;
+- stable tag без prerelease-суффикса назначается `Latest`;
+- implementation roadmap после 1.0 перенесён в отдельные направления развития.
+
+### Безопасность
+
+- удаляются только ресурсы из ownership ledger WinState;
+- чужие Git settings, files и directories блокируются на стадии plan;
+- непустые directories автоматически не удаляются;
+- PowerShell modules автоматически не удаляются;
+- существующие files копируются в backup до replacement/deletion;
+- Git config rollback восстанавливает исходное значение;
+- ownership записывается только после успешного действия;
+- state files и reports записываются атомарно;
+- неизвестная более новая persisted schema блокирует mutation;
+- updater restore создаёт safety backup до замены установки;
+- Authenticode status не имитируется и честно фиксируется в marker;
+- SHA-256 остаётся обязательным для каждого release archive.
+
+### Ограничения
+
+- Workspace files поддерживают UTF-8;
+- PowerShell module installation зависит от настроенного repository;
+- module uninstall не выполняется;
+- Authenticode применяется только при наличии защищённого официального сертификата в release secrets;
+- ownership не присваивается существующим ресурсам автоматически.
+
 ## [0.9.0] — 2026-08-02
 
 ### Добавлено

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "name": "Безопасное рабочее окружение разработчика",
+  "git": [
+    {
+      "key": "winstate.workspaceProfile",
+      "value": "stable-v1",
+      "state": "present"
+    }
+  ],
+  "powerShellModules": [],
+  "directories": [
+    {
+      "path": ".sandbox/tools",
+      "state": "present"
+    }
+  ],
+  "files": [
+    {
+      "path": ".sandbox/tools/workspace.txt",
+      "state": "present",
+      "encoding": "utf-8",
+      "content": "WinState Workspace Control 1.0\nЭтот файл создан безопасным CI-профилем.\n"
+    }
+  ]
+}
