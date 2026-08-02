@@ -2,6 +2,47 @@
 
 Все заметные изменения WinState документируются в этом файле.
 
+## [0.9.0] — 2026-08-02
+
+### Добавлено
+
+- стабильная команда `capture` для экспорта текущего состояния Windows в YAML;
+- JSON-манифест снимка с SHA-256, временем создания, версией приложения и количеством ресурсов;
+- экспорт User/Machine environment variables и PATH;
+- экспорт установленных пакетов WinGet с точными версиями;
+- экспорт включённых Windows Optional Features;
+- команда `drift` для read-only сравнения системы с профилем;
+- JSON-отчёт drift с actions, risks, admin requirements, rollback capability и diagnostics;
+- стабильные exit codes `0`, `3`, `6` и `10` для CI/автоматизации;
+- unit-тест безопасного снимка через fake WinGet/DISM clients;
+- Windows CI vertical slice `capture → validate → drift`;
+- русское руководство `docs/CAPTURE_DRIFT.md`;
+- русские release notes `docs/releases/v0.9.0.md`.
+
+### Изменено
+
+- версия приложения и CLI обновлена до `0.9.0` без prerelease-суффикса;
+- README и CLI help переработаны на русском языке;
+- release workflow использует русское описание из репозитория;
+- обычные теги без `-` публикуются как стабильные и помечаются `Latest`;
+- release pipeline создаёт общий файл `SHA256SUMS`;
+- package smoke test использует версию `0.9.0`.
+
+### Безопасность
+
+- Capture пропускает переменные с признаками паролей, токенов, ключей, credentials и строк подключения;
+- снимки и отчёты записываются атомарно через временный файл;
+- Drift выполняет только discovery и plan, не применяя изменения;
+- captured package scope требует ручной проверки перед apply;
+- массовое удаление неизвестных ресурсов по-прежнему запрещено.
+
+### Ограничения
+
+- WinGet inventory не всегда сообщает scope установки;
+- Capture экспортирует только включённые Optional Features;
+- Registry, Services, Startup и Scheduled Tasks не сканируются глобально и остаются exact-resource providers;
+- Authenticode signing и stable `1.0` pipeline остаются следующим этапом.
+
 ## [0.8.0-alpha.1] — 2026-08-01
 
 ### Добавлено
@@ -200,7 +241,7 @@
 ## [0.3.0-alpha.1] — 2026-08-01
 
 - интерактивный Control Center;
-- стрелочное управление, панели, логотип и анимации;
+- стрелочный управление, панели, логотип и анимации;
 - полный YAML Profile Engine;
 - includes, extends, variables и normalization;
 - Profile Center и UI smoke tests.

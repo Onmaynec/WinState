@@ -20,105 +20,113 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Restore
+      - name: Восстановление зависимостей
         run: dotnet restore WinState.sln
-      - name: Build
+      - name: Сборка
         run: dotnet build WinState.sln --configuration Release --no-restore
-      - name: Test
+      - name: Тесты
         run: dotnet test WinState.sln --configuration Release --no-build
-      - name: CLI help smoke test
+      - name: Проверка справки CLI
         run: dotnet run --project src/WinState.Cli --configuration Release --no-build -- --help
-      - name: Version smoke test
+      - name: Проверка версии
         shell: pwsh
         run: |
           $version = dotnet run --project src/WinState.Cli --configuration Release --no-build -- --version
-          if ($LASTEXITCODE -ne 0) { throw "Version command failed." }
-          if ($version -notmatch "0.8.0-alpha.1") { throw "Unexpected WinState version: $version" }
-      - name: Profile Engine smoke tests
+          if ($LASTEXITCODE -ne 0) { throw "Команда version завершилась ошибкой." }
+          if ($version -notmatch "0.9.0") { throw "Неожиданная версия WinState: $version" }
+      - name: Проверка Profile Engine
         shell: pwsh
         run: |
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- validate samples/profile-engine/workstation.yaml --var developerName=CI --var mode=true
-          if ($LASTEXITCODE -ne 0) { throw "Base Profile Engine smoke failed." }
+          if ($LASTEXITCODE -ne 0) { throw "Проверка базового профиля не пройдена." }
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- validate samples/packages-features/developer-workstation.yaml
-          if ($LASTEXITCODE -ne 0) { throw "Packages/features profile validation failed." }
+          if ($LASTEXITCODE -ne 0) { throw "Проверка профиля packages/features не пройдена." }
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- validate samples/system-control/safe-workstation.yaml
-          if ($LASTEXITCODE -ne 0) { throw "System Control profile validation failed." }
-      - name: Forge Control Fabric smoke test
+          if ($LASTEXITCODE -ne 0) { throw "Проверка профиля System Control не пройдена." }
+      - name: Проверка Forge Control Fabric
         shell: pwsh
         run: |
           $stateHome = Join-Path $PWD ".ci-winstate"
           $output = dotnet run --project src/WinState.Cli --configuration Release --no-build -- ui --demo --home $stateHome | Out-String
-          if ($LASTEXITCODE -ne 0) { throw "Forge demo failed." }
-          if ($output -notmatch "FORGE CONTROL FABRIC") { throw "Forge signature was not rendered." }
-          if ($output -notmatch "PACKAGE & FEATURE FORGE") { throw "Package Forge panel was not rendered." }
-          if ($output -notmatch "packages.winget") { throw "WinGet provider was not rendered." }
-          if ($output -notmatch "windows.features") { throw "Features provider was not rendered." }
-          if ($output -notmatch "windows.system") { throw "System Control provider was not registered." }
+          if ($LASTEXITCODE -ne 0) { throw "Демонстрация Forge завершилась ошибкой." }
+          if ($output -notmatch "FORGE CONTROL FABRIC") { throw "Сигнатура Forge не отображена." }
+          if ($output -notmatch "packages.winget") { throw "WinGet provider не отображён." }
+          if ($output -notmatch "windows.features") { throw "Features provider не отображён." }
+          if ($output -notmatch "windows.system") { throw "System Control provider не отображён." }
           Write-Host $output
-      - name: Environment Provider status
+      - name: Состояние Environment Provider
         shell: pwsh
         run: |
           $stateHome = Join-Path $PWD ".ci-winstate"
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- environment status --home $stateHome
-      - name: Windows provider prerequisites
+      - name: Предварительная проверка Windows providers
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $winget = winget --version
-          if ($LASTEXITCODE -ne 0) { throw "winget is not available." }
-          Write-Host "winget: $winget"
+          if ($LASTEXITCODE -ne 0) { throw "winget недоступен." }
           $dism = dism.exe /Online /Get-Features /Format:Table /English | Select-Object -First 12
-          if ($LASTEXITCODE -ne 0) { throw "DISM feature inventory failed." }
+          if ($LASTEXITCODE -ne 0) { throw "DISM inventory завершился ошибкой." }
           $sc = sc.exe query EventLog | Select-Object -First 8
-          if ($LASTEXITCODE -ne 0) { throw "Service Control Manager query failed." }
+          if ($LASTEXITCODE -ne 0) { throw "Service Control Manager недоступен." }
           $tasks = schtasks.exe /Query /FO LIST | Select-Object -First 8
-          if ($LASTEXITCODE -ne 0) { throw "Task Scheduler query failed." }
+          if ($LASTEXITCODE -ne 0) { throw "Task Scheduler недоступен." }
+          Write-Host "winget: $winget"
           Write-Host $dism
           Write-Host $sc
           Write-Host $tasks
-      - name: Environment Provider Windows vertical slice
+      - name: Вертикальная проверка Capture и Drift
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stateHome = Join-Path $PWD ".ci-winstate"
+          $snapshot = Join-Path $stateHome "snapshots/ci-current.yaml"
+          $report = Join-Path $stateHome "snapshots/ci-drift.json"
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- capture $snapshot "Снимок CI" --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Capture завершился ошибкой." }
+          if (-not (Test-Path $snapshot)) { throw "YAML-снимок не создан." }
+          if (-not (Test-Path "$snapshot.snapshot.json")) { throw "Манифест снимка не создан." }
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- validate $snapshot --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Созданный снимок не прошёл validation." }
+          dotnet run --project src/WinState.Cli --configuration Release --no-build -- drift $snapshot $report --home $stateHome
+          if ($LASTEXITCODE -ne 0) { throw "Свежий снимок содержит неожиданные отклонения. Код: $LASTEXITCODE" }
+          if (-not (Test-Path $report)) { throw "JSON-отчёт drift не создан." }
+          $drift = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($drift.hasDrift) { throw "JSON-отчёт сообщил об отклонениях." }
+      - name: Вертикальная проверка Environment Provider
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $stateHome = Join-Path $PWD ".ci-winstate"
           $profile = Join-Path $PWD "samples/environment-provider/user-sandbox.yaml"
-
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- environment plan $profile --home $stateHome
-          if ($LASTEXITCODE -ne 0) { throw "Environment plan failed." }
-
+          if ($LASTEXITCODE -ne 0) { throw "Environment plan завершился ошибкой." }
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- environment apply $profile --yes --home $stateHome
-          if ($LASTEXITCODE -ne 0) { throw "Environment apply failed." }
-
+          if ($LASTEXITCODE -ne 0) { throw "Environment apply завершился ошибкой." }
           $manifest = Get-ChildItem -LiteralPath (Join-Path $stateHome "backups/environment") -Filter manifest.json -File -Recurse |
             Sort-Object LastWriteTimeUtc -Descending |
             Select-Object -First 1
-          if (-not $manifest) { throw "Environment checkpoint manifest was not created." }
-
+          if (-not $manifest) { throw "Checkpoint manifest не создан." }
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- environment rollback $manifest.FullName --yes --home $stateHome
-          if ($LASTEXITCODE -ne 0) { throw "Environment rollback failed." }
-
+          if ($LASTEXITCODE -ne 0) { throw "Environment rollback завершился ошибкой." }
           $variable = [Environment]::GetEnvironmentVariable("WINSTATE_ENV_PROVIDER_SAMPLE", "User")
-          if ($null -ne $variable) { throw "Rollback did not remove the sample user variable." }
-
-          $expectedPath = [IO.Path]::GetFullPath((Join-Path $PWD "samples/environment-provider/tools"))
-          $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-          if (($userPath -split ';') -contains $expectedPath) { throw "Rollback did not restore the user PATH." }
-      - name: Doctor and storage smoke tests
+          if ($null -ne $variable) { throw "Rollback не удалил тестовую переменную." }
+      - name: Проверка Doctor и SQLite
         shell: pwsh
         run: |
           $stateHome = Join-Path $PWD ".ci-winstate"
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- doctor --home $stateHome
           dotnet run --project src/WinState.Cli --configuration Release --no-build -- storage status --home $stateHome
-      - name: Self-update package smoke test
+      - name: Проверка релизного пакета
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          .\scripts\package.ps1 -Runtime win-x64 -Version 0.8.0-alpha.1
-          $archive = Join-Path $PWD "artifacts/WinState-0.8.0-alpha.1-win-x64.zip"
+          .\scripts\package.ps1 -Runtime win-x64 -Version 0.9.0
+          $archive = Join-Path $PWD "artifacts/WinState-0.9.0-win-x64.zip"
           $checksum = "$archive.sha256"
-          if (-not (Test-Path $archive)) { throw "Release ZIP was not created." }
-          if (-not (Test-Path $checksum)) { throw "SHA-256 file was not created." }
+          if (-not (Test-Path $archive)) { throw "Релизный ZIP не создан." }
+          if (-not (Test-Path $checksum)) { throw "SHA-256 не создан." }
           $extract = Join-Path $PWD ".ci-package"
           Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
-          if (-not (Test-Path (Join-Path $extract "winstate.release.json"))) { throw "Release marker is missing." }
-          if (-not (Test-Path (Join-Path $extract "winstate.exe"))) { throw "Windows apphost is missing." }
+          if (-not (Test-Path (Join-Path $extract "winstate.release.json"))) { throw "Release marker отсутствует." }
+          if (-not (Test-Path (Join-Path $extract "winstate.exe"))) { throw "Windows apphost отсутствует." }

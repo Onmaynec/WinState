@@ -1,4 +1,4 @@
-name: release
+name: Публикация релиза
 
 on:
   push:
@@ -9,26 +9,61 @@ permissions:
 
 jobs:
   package:
+    name: Сборка и публикация
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Restore
+      - name: Подготовка метаданных релиза
+        id: meta
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $version = $tag.TrimStart('v')
+          $notes = "docs/releases/$tag.md"
+          if (-not (Test-Path $notes)) {
+            New-Item (Split-Path $notes) -ItemType Directory -Force | Out-Null
+            @"
+          # WinState $version
+
+          Подробности изменений находятся в CHANGELOG.md.
+          "@ | Set-Content -LiteralPath $notes -Encoding utf8
+          }
+          $titleLine = Get-Content -LiteralPath $notes | Where-Object { $_ -match '^# ' } | Select-Object -First 1
+          $title = if ($titleLine) { $titleLine.Substring(2).Trim() } else { "WinState $version" }
+          $isPrerelease = $tag.Contains('-')
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "notes=$notes" >> $env:GITHUB_OUTPUT
+          "title=$title" >> $env:GITHUB_OUTPUT
+          "prerelease=$($isPrerelease.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "latest=$(((-not $isPrerelease)).ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+      - name: Восстановление зависимостей
         run: dotnet restore WinState.sln
-      - name: Test
-        run: dotnet test WinState.sln --configuration Release
-      - name: Build win-x64 package
+      - name: Сборка
+        run: dotnet build WinState.sln --configuration Release --no-restore
+      - name: Тесты
+        run: dotnet test WinState.sln --configuration Release --no-build
+      - name: Сборка Windows x64
         shell: pwsh
-        run: .\scripts\package.ps1 -Runtime win-x64 -Version ($env:GITHUB_REF_NAME).TrimStart('v')
-      - name: Build win-arm64 package
+        run: .\scripts\package.ps1 -Runtime win-x64 -Version '${{ steps.meta.outputs.version }}'
+      - name: Сборка Windows ARM64
         shell: pwsh
-        run: .\scripts\package.ps1 -Runtime win-arm64 -Version ($env:GITHUB_REF_NAME).TrimStart('v')
-      - uses: softprops/action-gh-release@v2
+        run: .\scripts\package.ps1 -Runtime win-arm64 -Version '${{ steps.meta.outputs.version }}'
+      - name: Общий файл контрольных сумм
+        shell: pwsh
+        run: |
+          Get-Content artifacts/*.zip.sha256 | Set-Content artifacts/SHA256SUMS -Encoding utf8
+      - name: Публикация GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          generate_release_notes: true
+          name: ${{ steps.meta.outputs.title }}
+          body_path: ${{ steps.meta.outputs.notes }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          make_latest: ${{ steps.meta.outputs.latest }}
+          generate_release_notes: false
           files: |
             artifacts/*.zip
             artifacts/*.sha256
+            artifacts/SHA256SUMS

@@ -3,7 +3,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>winstate</AssemblyName>
     <RootNamespace>WinState.Cli</RootNamespace>
-    <Version>0.8.0-alpha.1</Version>
+    <Version>0.9.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinState.App\WinState.App.csproj" />
