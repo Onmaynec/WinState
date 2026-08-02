@@ -6,8 +6,8 @@ using System.Text.RegularExpressions;
 namespace WinState.App;
 
 /// <summary>
-/// Управляет пользовательским developer workspace: Git config, PowerShell modules,
-/// файлами и каталогами. Удаления разрешены только для ресурсов из ownership ledger.
+/// Управляет пользовательским workspace: Git config, PowerShell modules,
+/// файлами и каталогами. Удаление разрешено только для owned resources.
 /// </summary>
 public sealed class WorkspaceControlWorkflow
 {
@@ -81,7 +81,7 @@ public sealed class WorkspaceControlWorkflow
         {
             await PlanGitAsync(loaded.Manifest, ownership, actions, cancellationToken);
             await PlanModulesAsync(loaded.Manifest, actions, cancellationToken);
-            await PlanDirectoriesAsync(loaded, ownership, actions, cancellationToken);
+            PlanDirectories(loaded, ownership, actions, cancellationToken);
             await PlanFilesAsync(loaded, ownership, actions, cancellationToken);
         }
 
@@ -110,36 +110,14 @@ public sealed class WorkspaceControlWorkflow
     {
         var startedAt = DateTimeOffset.UtcNow;
         var plan = await PlanAsync(manifestPath, reportDirectory, cancellationToken);
-        if (!plan.IsValid)
-        {
-            throw new InvalidDataException("Workspace manifest не прошёл validation.");
-        }
-
-        if (!plan.IsSupported)
-        {
-            throw new PlatformNotSupportedException("Один или несколько Workspace providers недоступны.");
-        }
-
-        if (plan.Actions.Any(action => action.Blocked))
-        {
-            throw new InvalidOperationException("План содержит заблокированные действия.");
-        }
-
-        if (plan.DestructiveChanges > 0 && !allowDelete)
-        {
-            throw new InvalidOperationException("План содержит удаления. Добавьте --allow-delete.");
-        }
-
-        if (plan.Actions.Any(action => action.Provider == "powershell.modules") && !allowPowerShellModules)
-        {
-            throw new InvalidOperationException("Установка PowerShell modules требует --allow-modules.");
-        }
+        EnsurePlanAllowed(plan, allowPowerShellModules, allowDelete);
 
         var loaded = await LoadManifestAsync(manifestPath, cancellationToken);
         var transactionId = $"workspace-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}";
         var transactionDirectory = Path.Combine(_homeDirectory, "backups", "workspace", transactionId);
-        Directory.CreateDirectory(transactionDirectory);
         var transactionPath = Path.Combine(transactionDirectory, "transaction.json");
+        Directory.CreateDirectory(transactionDirectory);
+
         var ownership = await LoadOwnershipAsync(cancellationToken);
         var transaction = new WorkspaceTransaction
         {
@@ -157,6 +135,7 @@ public sealed class WorkspaceControlWorkflow
         var failed = 0;
         var rolledBack = false;
         Exception? failure = null;
+
         foreach (var action in plan.Actions)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -168,9 +147,10 @@ public sealed class WorkspaceControlWorkflow
                 Operation = action.Operation,
                 Resource = action.Resource,
                 SupportsRollback = action.SupportsRollback,
-                WasOwned = ownership.Resources.Contains(ownershipKey, StringComparer.OrdinalIgnoreCase)
+                WasOwned = Owns(ownership, ownershipKey)
             };
             transaction.Actions.Add(entry);
+
             try
             {
                 await ApplyActionAsync(
@@ -187,11 +167,7 @@ public sealed class WorkspaceControlWorkflow
                 await SaveOwnershipAsync(ownership, cancellationToken);
                 await SaveTransactionAsync(transactionPath, transaction, cancellationToken);
             }
-            catch (Exception exception) when (exception is IOException
-                or UnauthorizedAccessException
-                or InvalidDataException
-                or InvalidOperationException
-                or PlatformNotSupportedException)
+            catch (Exception exception) when (IsExpectedFailure(exception))
             {
                 entry.Status = "failed";
                 entry.Message = exception.Message;
@@ -216,7 +192,7 @@ public sealed class WorkspaceControlWorkflow
                     entry.Status = "rolled-back";
                     messages.Add($"[ОТКАТ] {entry.Provider}: {entry.Resource}");
                 }
-                catch (Exception rollbackException)
+                catch (Exception rollbackException) when (IsExpectedFailure(rollbackException))
                 {
                     messages.Add($"[ОШИБКА ОТКАТА] {entry.Resource}: {rollbackException.Message}");
                 }
@@ -254,11 +230,12 @@ public sealed class WorkspaceControlWorkflow
         CancellationToken cancellationToken)
     {
         var fullPath = Path.GetFullPath(transactionPath);
-        await using var stream = File.OpenRead(fullPath);
-        var transaction = await JsonSerializer.DeserializeAsync<WorkspaceTransaction>(
-            stream,
-            JsonOptions,
-            cancellationToken) ?? throw new InvalidDataException("Transaction manifest повреждён.");
+
+        // Не держим transaction.json открытым во время последующей атомарной замены.
+        // Windows запрещает File.Move(overwrite) для открытого destination file.
+        var json = await File.ReadAllTextAsync(fullPath, cancellationToken);
+        var transaction = JsonSerializer.Deserialize<WorkspaceTransaction>(json, JsonOptions)
+            ?? throw new InvalidDataException("Transaction manifest повреждён.");
         if (transaction.SchemaVersion > TransactionSchemaVersion)
         {
             throw new InvalidDataException("Transaction schema создана более новой версией WinState.");
@@ -316,6 +293,37 @@ public sealed class WorkspaceControlWorkflow
             latest);
     }
 
+    private static void EnsurePlanAllowed(
+        WorkspacePlanReport plan,
+        bool allowPowerShellModules,
+        bool allowDelete)
+    {
+        if (!plan.IsValid)
+        {
+            throw new InvalidDataException("Workspace manifest не прошёл validation.");
+        }
+
+        if (!plan.IsSupported)
+        {
+            throw new PlatformNotSupportedException("Один или несколько Workspace providers недоступны.");
+        }
+
+        if (plan.Actions.Any(action => action.Blocked))
+        {
+            throw new InvalidOperationException("План содержит заблокированные действия.");
+        }
+
+        if (plan.DestructiveChanges > 0 && !allowDelete)
+        {
+            throw new InvalidOperationException("План содержит удаления. Добавьте --allow-delete.");
+        }
+
+        if (plan.Actions.Any(action => action.Provider == "powershell.modules") && !allowPowerShellModules)
+        {
+            throw new InvalidOperationException("Установка PowerShell modules требует --allow-modules.");
+        }
+    }
+
     private async Task PlanGitAsync(
         WorkspaceManifest manifest,
         OwnershipLedger ownership,
@@ -343,11 +351,11 @@ public sealed class WorkspaceControlWorkflow
                     owned ? "Удалить" : "Заблокировано",
                     entry.Key,
                     "Средний",
-                    true,
-                    true,
-                    !owned,
+                    destructive: true,
+                    supportsRollback: true,
+                    blocked: !owned,
                     current,
-                    null,
+                    desired: null,
                     owned
                         ? $"Удалить принадлежащую WinState настройку Git '{entry.Key}'."
                         : $"Настройка Git '{entry.Key}' не принадлежит WinState."));
@@ -359,9 +367,9 @@ public sealed class WorkspaceControlWorkflow
                     "Установить",
                     entry.Key,
                     "Низкий",
-                    false,
-                    true,
-                    false,
+                    destructive: false,
+                    supportsRollback: true,
+                    blocked: false,
                     current,
                     entry.Value,
                     $"Установить глобальную настройку Git '{entry.Key}'."));
@@ -391,11 +399,11 @@ public sealed class WorkspaceControlWorkflow
                         "Заблокировано",
                         module.Name,
                         "Высокий",
-                        true,
-                        false,
-                        true,
+                        destructive: true,
+                        supportsRollback: false,
+                        blocked: true,
                         current,
-                        null,
+                        desired: null,
                         "WinState 1.0 не удаляет PowerShell modules автоматически."));
                 }
             }
@@ -406,9 +414,9 @@ public sealed class WorkspaceControlWorkflow
                     "Установить",
                     module.Name,
                     "Средний",
-                    false,
-                    false,
-                    false,
+                    destructive: false,
+                    supportsRollback: false,
+                    blocked: false,
                     current,
                     module.MinimumVersion ?? "latest",
                     $"Установить PowerShell module '{module.Name}' для CurrentUser."));
@@ -416,7 +424,7 @@ public sealed class WorkspaceControlWorkflow
         }
     }
 
-    private static Task PlanDirectoriesAsync(
+    private static void PlanDirectories(
         LoadedWorkspaceManifest loaded,
         OwnershipLedger ownership,
         ICollection<WorkspaceAction> actions,
@@ -442,11 +450,11 @@ public sealed class WorkspaceControlWorkflow
                     blocked ? "Заблокировано" : "Удалить каталог",
                     path,
                     "Высокий",
-                    true,
-                    true,
+                    destructive: true,
+                    supportsRollback: true,
                     blocked,
-                    "exists",
-                    null,
+                    current: "exists",
+                    desired: null,
                     !owned
                         ? "Каталог не принадлежит WinState."
                         : !empty
@@ -460,16 +468,14 @@ public sealed class WorkspaceControlWorkflow
                     "Создать каталог",
                     path,
                     "Низкий",
-                    false,
-                    true,
-                    false,
-                    null,
-                    "directory",
+                    destructive: false,
+                    supportsRollback: true,
+                    blocked: false,
+                    current: null,
+                    desired: "directory",
                     "Создать управляемый каталог."));
             }
         }
-
-        return Task.CompletedTask;
     }
 
     private static async Task PlanFilesAsync(
@@ -495,11 +501,11 @@ public sealed class WorkspaceControlWorkflow
                     owned ? "Удалить файл" : "Заблокировано",
                     path,
                     "Высокий",
-                    true,
-                    true,
-                    !owned,
-                    await FileSha256Async(path, cancellationToken),
-                    null,
+                    destructive: true,
+                    supportsRollback: true,
+                    blocked: !owned,
+                    current: await FileSha256Async(path, cancellationToken),
+                    desired: null,
                     owned
                         ? "Удалить управляемый файл после backup."
                         : "Файл не принадлежит WinState."));
@@ -516,9 +522,9 @@ public sealed class WorkspaceControlWorkflow
                     exists ? "Обновить файл" : "Создать файл",
                     path,
                     exists ? "Средний" : "Низкий",
-                    false,
-                    true,
-                    false,
+                    destructive: false,
+                    supportsRollback: true,
+                    blocked: false,
                     currentHash,
                     desiredHash,
                     exists
@@ -585,7 +591,7 @@ public sealed class WorkspaceControlWorkflow
             }
             else
             {
-                Directory.Delete(action.Resource, false);
+                Directory.Delete(action.Resource, recursive: false);
                 RemoveOwnership(ownership, ownershipKey);
             }
 
@@ -600,7 +606,7 @@ public sealed class WorkspaceControlWorkflow
                 "files",
                 $"{action.Id}-{Path.GetFileName(action.Resource)}");
             Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
-            File.Copy(action.Resource, backupPath, true);
+            File.Copy(action.Resource, backupPath, overwrite: true);
             entry.BackupPath = backupPath;
         }
 
@@ -617,7 +623,7 @@ public sealed class WorkspaceControlWorkflow
         Directory.CreateDirectory(Path.GetDirectoryName(action.Resource)!);
         var temporaryPath = action.Resource + $".winstate-{Guid.NewGuid():N}.tmp";
         await File.WriteAllBytesAsync(temporaryPath, bytes, cancellationToken);
-        File.Move(temporaryPath, action.Resource, true);
+        File.Move(temporaryPath, action.Resource, overwrite: true);
         AddOwnership(ownership, ownershipKey);
     }
 
@@ -648,7 +654,7 @@ public sealed class WorkspaceControlWorkflow
             else if (Directory.Exists(entry.Resource)
                 && !Directory.EnumerateFileSystemEntries(entry.Resource).Any())
             {
-                Directory.Delete(entry.Resource, false);
+                Directory.Delete(entry.Resource, recursive: false);
             }
         }
         else if (entry.Provider == "files.managed")
@@ -656,7 +662,7 @@ public sealed class WorkspaceControlWorkflow
             if (entry.Existed && !string.IsNullOrWhiteSpace(entry.BackupPath))
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(entry.Resource)!);
-                File.Copy(entry.BackupPath, entry.Resource, true);
+                File.Copy(entry.BackupPath, entry.Resource, overwrite: true);
             }
             else if (!entry.Existed && File.Exists(entry.Resource))
             {
@@ -672,6 +678,25 @@ public sealed class WorkspaceControlWorkflow
         {
             RemoveOwnership(ownership, ownershipKey);
         }
+    }
+
+    private async Task<LoadedWorkspaceManifest> LoadManifestAsync(
+        string manifestPath,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(manifestPath))
+        {
+            throw new ArgumentException("Не указан Workspace manifest.", nameof(manifestPath));
+        }
+
+        var fullPath = Path.GetFullPath(manifestPath);
+        var json = await File.ReadAllTextAsync(fullPath, cancellationToken);
+        var manifest = JsonSerializer.Deserialize<WorkspaceManifest>(json, JsonOptions)
+            ?? throw new InvalidDataException("Workspace manifest пуст или повреждён.");
+        return new LoadedWorkspaceManifest(
+            fullPath,
+            Path.GetDirectoryName(fullPath) ?? Environment.CurrentDirectory,
+            manifest);
     }
 
     private static List<string> ValidateManifest(WorkspaceManifest manifest, string manifestPath)
@@ -693,7 +718,6 @@ public sealed class WorkspaceControlWorkflow
             {
                 issues.Add("Git entry содержит пустой key.");
             }
-
             ValidateState(entry.State, $"Git '{entry.Key}'", issues);
             if (!IsAbsent(entry.State) && entry.Value is null)
             {
@@ -707,7 +731,6 @@ public sealed class WorkspaceControlWorkflow
             {
                 issues.Add("PowerShell module содержит пустое имя.");
             }
-
             ValidateState(module.State, $"Module '{module.Name}'", issues);
             if (!string.IsNullOrWhiteSpace(module.MinimumVersion)
                 && !Version.TryParse(module.MinimumVersion, out _))
@@ -722,7 +745,6 @@ public sealed class WorkspaceControlWorkflow
             {
                 issues.Add("Directory entry содержит пустой path.");
             }
-
             ValidateState(directory.State, $"Directory '{directory.Path}'", issues);
         }
 
@@ -732,7 +754,6 @@ public sealed class WorkspaceControlWorkflow
             {
                 issues.Add("File entry содержит пустой path.");
             }
-
             ValidateState(file.State, $"File '{file.Path}'", issues);
             if (!IsAbsent(file.State))
             {
@@ -742,7 +763,6 @@ public sealed class WorkspaceControlWorkflow
                 {
                     issues.Add($"File '{file.Path}': укажите ровно одно из content или source.");
                 }
-
                 if (!file.Encoding.Equals("utf-8", StringComparison.OrdinalIgnoreCase))
                 {
                     issues.Add($"File '{file.Path}': поддерживается только utf-8.");
@@ -774,27 +794,6 @@ public sealed class WorkspaceControlWorkflow
         }
     }
 
-    private async Task<LoadedWorkspaceManifest> LoadManifestAsync(
-        string manifestPath,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(manifestPath))
-        {
-            throw new ArgumentException("Не указан Workspace manifest.", nameof(manifestPath));
-        }
-
-        var fullPath = Path.GetFullPath(manifestPath);
-        await using var stream = File.OpenRead(fullPath);
-        var manifest = await JsonSerializer.DeserializeAsync<WorkspaceManifest>(
-            stream,
-            JsonOptions,
-            cancellationToken) ?? throw new InvalidDataException("Workspace manifest пуст или повреждён.");
-        return new LoadedWorkspaceManifest(
-            fullPath,
-            Path.GetDirectoryName(fullPath) ?? Environment.CurrentDirectory,
-            manifest);
-    }
-
     private async Task<OwnershipLedger> LoadOwnershipAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_ownershipPath))
@@ -802,11 +801,9 @@ public sealed class WorkspaceControlWorkflow
             return new OwnershipLedger { SchemaVersion = OwnershipSchemaVersion };
         }
 
-        await using var stream = File.OpenRead(_ownershipPath);
-        var ledger = await JsonSerializer.DeserializeAsync<OwnershipLedger>(
-            stream,
-            JsonOptions,
-            cancellationToken) ?? new OwnershipLedger();
+        var json = await File.ReadAllTextAsync(_ownershipPath, cancellationToken);
+        var ledger = JsonSerializer.Deserialize<OwnershipLedger>(json, JsonOptions)
+            ?? new OwnershipLedger();
         if (ledger.SchemaVersion > OwnershipSchemaVersion)
         {
             throw new InvalidDataException("Ownership ledger создан более новой версией WinState.");
@@ -851,7 +848,6 @@ public sealed class WorkspaceControlWorkflow
         CancellationToken cancellationToken)
     {
         var directory = ResolveReportDirectory(reportDirectory);
-        Directory.CreateDirectory(directory);
         var stem = $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}-workspace-plan-{Slug(report.Name)}";
         var jsonPath = Path.Combine(directory, stem + ".json");
         var markdownPath = Path.Combine(directory, stem + ".md");
@@ -867,7 +863,6 @@ public sealed class WorkspaceControlWorkflow
         CancellationToken cancellationToken)
     {
         var directory = ResolveReportDirectory(reportDirectory);
-        Directory.CreateDirectory(directory);
         var stem = $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}-workspace-apply-{Slug(report.Name)}";
         var jsonPath = Path.Combine(directory, stem + ".json");
         var markdownPath = Path.Combine(directory, stem + ".md");
@@ -944,7 +939,7 @@ public sealed class WorkspaceControlWorkflow
     {
         if (file.Content is not null)
         {
-            return new UTF8Encoding(false).GetBytes(file.Content);
+            return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(file.Content);
         }
 
         if (string.IsNullOrWhiteSpace(file.Source))
@@ -971,12 +966,10 @@ public sealed class WorkspaceControlWorkflow
         {
             return false;
         }
-
         if (string.IsNullOrWhiteSpace(minimum))
         {
             return true;
         }
-
         return Version.TryParse(current, out var currentVersion)
             && Version.TryParse(minimum, out var minimumVersion)
             && currentVersion.CompareTo(minimumVersion) >= 0;
@@ -1027,6 +1020,13 @@ public sealed class WorkspaceControlWorkflow
             right,
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
+    private static bool IsExpectedFailure(Exception exception)
+        => exception is IOException
+            or UnauthorizedAccessException
+            or InvalidDataException
+            or InvalidOperationException
+            or PlatformNotSupportedException;
+
     private static string BuildPlanMarkdown(WorkspacePlanReport report)
     {
         var text = new StringBuilder();
@@ -1048,16 +1048,10 @@ public sealed class WorkspaceControlWorkflow
         {
             text.AppendLine($"| {EscapeMarkdown(action.Provider)} | {EscapeMarkdown(action.Operation)} | {action.Risk} | `{EscapeMarkdown(action.Resource)}` | {(action.SupportsRollback ? "да" : "нет")} |");
         }
-
-        if (report.Diagnostics.Count > 0)
+        foreach (var diagnostic in report.Diagnostics)
         {
-            text.AppendLine().AppendLine("## Диагностика").AppendLine();
-            foreach (var diagnostic in report.Diagnostics)
-            {
-                text.AppendLine($"- {diagnostic}");
-            }
+            text.AppendLine($"- {diagnostic}");
         }
-
         return text.ToString();
     }
 
@@ -1079,7 +1073,6 @@ public sealed class WorkspaceControlWorkflow
         {
             text.AppendLine($"- {message}");
         }
-
         return text.ToString();
     }
 
@@ -1109,9 +1102,9 @@ public sealed class WorkspaceControlWorkflow
         await File.WriteAllTextAsync(
             temporaryPath,
             JsonSerializer.Serialize(value, JsonOptions),
-            new UTF8Encoding(false),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             cancellationToken);
-        File.Move(temporaryPath, path, true);
+        File.Move(temporaryPath, path, overwrite: true);
     }
 
     private static async Task WriteTextAtomicallyAsync(
@@ -1121,8 +1114,12 @@ public sealed class WorkspaceControlWorkflow
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporaryPath = path + $".{Guid.NewGuid():N}.tmp";
-        await File.WriteAllTextAsync(temporaryPath, value, new UTF8Encoding(false), cancellationToken);
-        File.Move(temporaryPath, path, true);
+        await File.WriteAllTextAsync(
+            temporaryPath,
+            value,
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            cancellationToken);
+        File.Move(temporaryPath, path, overwrite: true);
     }
 
     private sealed record LoadedWorkspaceManifest(
