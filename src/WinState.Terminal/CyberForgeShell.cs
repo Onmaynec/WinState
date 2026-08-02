@@ -31,6 +31,7 @@ public sealed class CyberForgeShell
                 new SelectionPrompt<string>()
                     .Title("[bold green]SELECT FORGE CHANNEL[/]")
                     .HighlightStyle(new Style(Color.Black, Color.Green1))
+                    .UseConverter(Markup.Escape)
                     .AddChoices(
                         "[01] NEXUS CONTROL FABRIC // transactions, update uplink and legacy control center",
                         "[02] PACKAGE & FEATURE FORGE // WinGet inventory, DISM features and unified plans",
@@ -65,6 +66,7 @@ public sealed class CyberForgeShell
                 new SelectionPrompt<string>()
                     .Title("[bold green]SELECT FORGE OPERATION[/]")
                     .HighlightStyle(new Style(Color.Black, Color.Green1))
+                    .UseConverter(Markup.Escape)
                     .AddChoices(
                         "[11] REFRESH INVENTORY // winget list + DISM feature inventory",
                         "[12] BUILD UNIFIED PLAN // environment + packages + features",
@@ -280,6 +282,7 @@ public sealed class CyberForgeShell
                 .Title("[bold green]SELECT PROFILE[/]")
                 .PageSize(Math.Min(12, profiles.Length))
                 .HighlightStyle(new Style(Color.Black, Color.Green1))
+                .UseConverter(Markup.Escape)
                 .AddChoices(profiles));
         return selected;
     }
