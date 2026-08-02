@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 
 namespace WinState.App;
 
@@ -29,11 +30,21 @@ public sealed class UpdateBackupRestoreWorkflow
             throw new DirectoryNotFoundException($"Updater backup не найден: {backup}");
         }
 
-        if (!File.Exists(Path.Combine(backup, "winstate.exe"))
-            || !File.Exists(Path.Combine(backup, "winstate.release.json")))
+        var backupExecutable = Path.Combine(backup, "winstate.exe");
+        var backupMarker = Path.Combine(backup, "winstate.release.json");
+        if (!File.Exists(backupExecutable) || !File.Exists(backupMarker))
         {
             throw new InvalidDataException(
                 "Updater backup должен содержать winstate.exe и winstate.release.json.");
+        }
+
+        try
+        {
+            _ = JsonDocument.Parse(await File.ReadAllTextAsync(backupMarker, cancellationToken));
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException("winstate.release.json в backup повреждён.", exception);
         }
 
         var operationId = $"restore-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}";
@@ -46,7 +57,7 @@ public sealed class UpdateBackupRestoreWorkflow
         await File.WriteAllTextAsync(
             scriptPath,
             BuildRestoreScript(),
-            new UTF8Encoding(false),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             cancellationToken);
 
         var scheduled = false;
@@ -95,22 +106,40 @@ public sealed class UpdateBackupRestoreWorkflow
             return;
         }
 
-        Directory.CreateDirectory(destination);
-        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        var sourcePath = Path.GetFullPath(source);
+        var destinationPath = Path.GetFullPath(destination);
+        var files = Directory
+            .EnumerateFiles(sourcePath, "*", SearchOption.AllDirectories)
+            .Where(file => !IsInside(file, destinationPath))
+            .ToArray();
+
+        Directory.CreateDirectory(destinationPath);
+        foreach (var file in files)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var relative = Path.GetRelativePath(source, file);
+            var relative = Path.GetRelativePath(sourcePath, file);
             if (IsPreserved(relative))
             {
                 continue;
             }
 
-            var target = Path.Combine(destination, relative);
+            var target = Path.Combine(destinationPath, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             await using var input = File.OpenRead(file);
             await using var output = File.Create(target);
             await input.CopyToAsync(output, cancellationToken);
         }
+    }
+
+    private static bool IsInside(string candidate, string directory)
+    {
+        var candidatePath = Path.GetFullPath(candidate);
+        var directoryPath = Path.GetFullPath(directory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        return candidatePath.StartsWith(
+            directoryPath,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 
     private static bool IsPreserved(string relative)
