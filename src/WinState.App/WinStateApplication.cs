@@ -23,7 +23,7 @@ public sealed record ProfileCatalogEntry(
 /// <summary>Композиционный корень и фасад прикладных сценариев WinState.</summary>
 public sealed class WinStateApplication : IAsyncDisposable
 {
-    public const string Version = "0.8.0-alpha.1";
+    public const string Version = "0.9.0";
 
     private readonly ServiceProvider _services;
 
@@ -86,6 +86,8 @@ public sealed class WinStateApplication : IAsyncDisposable
         services.AddSingleton<IApplyProviderExecutor, WindowsSystemApplyExecutor>();
         services.AddSingleton<ApplyEngine>();
         services.AddSingleton<UnifiedApplyWorkflow>();
+        services.AddSingleton<CaptureWorkflow>();
+        services.AddSingleton<DriftWorkflow>();
         services.AddSingleton<DoctorService>();
         return new WinStateApplication(services.BuildServiceProvider(), options);
     }
@@ -112,6 +114,26 @@ public sealed class WinStateApplication : IAsyncDisposable
         string path,
         CancellationToken cancellationToken)
         => ValidateProfileAsync(path, null, cancellationToken);
+
+    public Task<CaptureReport> CaptureAsync(
+        string outputPath,
+        string? profileName,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<CaptureWorkflow>()
+            .ExportAsync(outputPath, profileName, cancellationToken);
+
+    public Task<DriftReport> CheckDriftAsync(
+        string profilePath,
+        IReadOnlyDictionary<string, string>? variables,
+        string? reportPath,
+        CancellationToken cancellationToken)
+        => _services.GetRequiredService<DriftWorkflow>()
+            .CheckAsync(
+                profilePath,
+                variables,
+                ReadEnvironment(),
+                reportPath,
+                cancellationToken);
 
     public Task<EnvironmentStatusReport> GetEnvironmentStatusAsync(
         CancellationToken cancellationToken)
