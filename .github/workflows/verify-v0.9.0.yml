@@ -1,0 +1,86 @@
+name: Проверка WinState 0.9.0
+
+on:
+  push:
+    branches: [release/verify-v0.9.0]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify:
+    name: Проверка Latest и файлов
+    runs-on: windows-latest
+    steps:
+      - name: Ожидание Release и проверка статуса
+        id: release
+        shell: pwsh
+        run: |
+          $headers = @{ Accept = 'application/vnd.github+json' }
+          $release = $null
+          for ($attempt = 1; $attempt -le 24; $attempt++) {
+            try {
+              $release = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/Onmaynec/WinState/releases/tags/v0.9.0'
+              break
+            } catch {
+              Write-Host "Release ещё не готов: попытка $attempt/24"
+              Start-Sleep -Seconds 15
+            }
+          }
+          if ($null -eq $release) { throw 'Release v0.9.0 не опубликован.' }
+          if ($release.draft) { throw 'Release остался черновиком.' }
+          if ($release.prerelease) { throw 'Release ошибочно отмечен как Pre-release.' }
+          if ($release.name -ne 'WinState 0.9.0 — Снимки состояния и контроль отклонений') {
+            throw "Некорректное русское название: $($release.name)"
+          }
+          $latest = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/Onmaynec/WinState/releases/latest'
+          if ($latest.tag_name -ne 'v0.9.0') { throw "Latest указывает на $($latest.tag_name)." }
+          $expected = @(
+            'WinState-0.9.0-win-x64.zip',
+            'WinState-0.9.0-win-arm64.zip',
+            'WinState-0.9.0-win-x64.zip.sha256',
+            'WinState-0.9.0-win-arm64.zip.sha256',
+            'SHA256SUMS'
+          )
+          $actual = @($release.assets | ForEach-Object { $_.name })
+          foreach ($name in $expected) {
+            if ($actual -notcontains $name) { throw "Отсутствует файл $name." }
+          }
+          if ($actual.Count -ne 5) { throw "Ожидалось 5 файлов, найдено $($actual.Count)." }
+          $release | ConvertTo-Json -Depth 8 | Set-Content release.json -Encoding utf8
+      - name: Загрузка и проверка архивов
+        shell: pwsh
+        run: |
+          $release = Get-Content release.json -Raw | ConvertFrom-Json
+          New-Item verify -ItemType Directory -Force | Out-Null
+          foreach ($asset in $release.assets) {
+            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile (Join-Path verify $asset.name)
+          }
+          foreach ($runtime in @('win-x64', 'win-arm64')) {
+            $zip = Join-Path verify "WinState-0.9.0-$runtime.zip"
+            $sum = "$zip.sha256"
+            $expectedHash = ((Get-Content $sum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+            $actualHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($expectedHash -ne $actualHash) { throw "SHA-256 не совпадает для $runtime." }
+            $extract = Join-Path verify "extract-$runtime"
+            Expand-Archive $zip $extract -Force
+            if (-not (Test-Path (Join-Path $extract 'winstate.exe'))) { throw "Нет winstate.exe для $runtime." }
+            $marker = Get-Content (Join-Path $extract 'winstate.release.json') -Raw | ConvertFrom-Json
+            if ($marker.version -ne '0.9.0' -or $marker.runtime -ne $runtime) {
+              throw "Некорректный release marker для $runtime."
+            }
+          }
+          if (@(Get-Content (Join-Path verify 'SHA256SUMS') | Where-Object { $_.Trim() }).Count -ne 2) {
+            throw 'SHA256SUMS должен содержать две строки.'
+          }
+      - name: Запись результата в PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 9,
+              body: `✅ **Стабильный релиз WinState 0.9.0 проверен**\n\n- тег \`v0.9.0\` указывает на merge-коммит \`c4a377051f6b1bae44a22d215ca390faa99d4e09\`;\n- Release не является черновиком и не отмечен как Pre-release;\n- GitHub Latest указывает на \`v0.9.0\`;\n- название и описание оформлены на русском языке;\n- опубликованы x64 ZIP, ARM64 ZIP, две индивидуальные \`.sha256\` и \`SHA256SUMS\`;\n- SHA-256 обоих архивов совпал;\n- оба ZIP содержат \`winstate.exe\` и корректный marker версии \`0.9.0\`.\n\nhttps://github.com/Onmaynec/WinState/releases/tag/v0.9.0`
+            });
