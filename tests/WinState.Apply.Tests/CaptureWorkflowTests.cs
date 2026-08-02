@@ -3,6 +3,7 @@ using WinState.Core.Profiles;
 using WinState.Providers.EnvironmentVariables;
 using WinState.Providers.Features;
 using WinState.Providers.Packages;
+using Xunit;
 
 namespace WinState.Apply.Tests;
 
