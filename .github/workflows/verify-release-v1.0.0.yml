@@ -9,11 +9,10 @@ on:
 permissions:
   contents: write
 
-timeout-minutes: 30
-
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Ожидание опубликованного релиза
         env:
@@ -61,13 +60,9 @@ jobs:
           verify_archive() {
             runtime="$1"
             archive="WinState-1.0.0-$runtime.zip"
-            checksum_file="$archive.sha256"
-            expected_hash=$(tr -d '\r\n' < "$checksum_file" | awk '{print tolower($1)}')
+            expected_hash=$(tr -d '\r\n' < "$archive.sha256" | awk '{print tolower($1)}')
             actual_hash=$(sha256sum "$archive" | awk '{print tolower($1)}')
-            test "$expected_hash" = "$actual_hash" || {
-              echo "SHA-256 mismatch: $runtime" >&2
-              exit 1
-            }
+            test "$expected_hash" = "$actual_hash" || { echo "SHA-256 mismatch: $runtime" >&2; exit 1; }
 
             extract="$RUNNER_TEMP/extract-$runtime"
             mkdir -p "$extract"
@@ -126,8 +121,15 @@ jobs:
           content=$(base64 -w0 "$file")
           endpoint="repos/${{ github.repository }}/contents/release-verification-v1.0.0.json"
           existing=$(gh api "$endpoint?ref=release/verify-result-v1.0.0" --jq .sha 2>/dev/null || true)
-          args=(--method PUT "$endpoint" -f message='release: зафиксировать проверку v1.0.0' -f content="$content" -f branch='release/verify-result-v1.0.0')
           if [ -n "$existing" ]; then
-            args+=(-f sha="$existing")
+            gh api --method PUT "$endpoint" \
+              -f message='release: зафиксировать проверку v1.0.0' \
+              -f content="$content" \
+              -f branch='release/verify-result-v1.0.0' \
+              -f sha="$existing"
+          else
+            gh api --method PUT "$endpoint" \
+              -f message='release: зафиксировать проверку v1.0.0' \
+              -f content="$content" \
+              -f branch='release/verify-result-v1.0.0'
           fi
-          gh api "${args[@]}"
