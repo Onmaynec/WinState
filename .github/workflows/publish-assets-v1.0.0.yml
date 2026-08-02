@@ -1,0 +1,107 @@
+name: Публикация assets v1.0.0
+
+on:
+  push:
+    branches: [release/publish-assets-v1.0.0]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v1.0.0
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Проверка тега и исходного коммита
+        shell: pwsh
+        run: |
+          $expected = 'ce21602b0afc1b6393c179dc81a7b5a6ff032745'
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $expected) { throw "v1.0.0 указывает на $actual вместо $expected" }
+      - name: Восстановление зависимостей
+        run: dotnet restore WinState.sln
+      - name: Сборка
+        run: dotnet build WinState.sln --configuration Release --no-restore
+      - name: Тесты
+        run: dotnet test WinState.sln --configuration Release --no-build
+      - name: Импорт сертификата Authenticode
+        id: signing
+        shell: pwsh
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.WINSTATE_SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.WINSTATE_SIGNING_PFX_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_PFX_BASE64)) {
+            "enabled=false" >> $env:GITHUB_OUTPUT
+            "thumbprint=" >> $env:GITHUB_OUTPUT
+            Write-Host "Signing secrets не настроены; marker будет authenticodeSigned=false."
+            exit 0
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'winstate-signing.pfx'
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+          $password = ConvertTo-SecureString $env:SIGNING_PFX_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          if (-not $certificate -or -not $certificate.HasPrivateKey) {
+            throw 'Сертификат Authenticode не импортирован или не содержит private key.'
+          }
+          Remove-Item $certificatePath -Force
+          "enabled=true" >> $env:GITHUB_OUTPUT
+          "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
+      - name: Сборка Windows x64
+        shell: pwsh
+        run: .\scripts\package.ps1 -Runtime win-x64 -Version 1.0.0 -SigningThumbprint '${{ steps.signing.outputs.thumbprint }}'
+      - name: Сборка Windows ARM64
+        shell: pwsh
+        run: .\scripts\package.ps1 -Runtime win-arm64 -Version 1.0.0 -SigningThumbprint '${{ steps.signing.outputs.thumbprint }}'
+      - name: Проверка markers и контрольных сумм
+        shell: pwsh
+        run: |
+          foreach ($runtime in @('win-x64', 'win-arm64')) {
+            $markerPath = "artifacts/publish-$runtime/winstate.release.json"
+            $marker = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json
+            if ($marker.version -ne '1.0.0') { throw "Некорректная версия marker: $runtime" }
+            if ($marker.runtime -ne $runtime) { throw "Некорректный runtime marker: $runtime" }
+            if ($marker.product -ne 'WinState') { throw "Некорректный product marker: $runtime" }
+            $expectedSigning = '${{ steps.signing.outputs.enabled }}' -eq 'true'
+            if ([bool]$marker.authenticodeSigned -ne $expectedSigning) { throw "Некорректный Authenticode marker: $runtime" }
+            $archive = "artifacts/WinState-1.0.0-$runtime.zip"
+            $expectedHash = ((Get-Content -LiteralPath "$archive.sha256" -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+            $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($expectedHash -ne $actualHash) { throw "SHA-256 mismatch: $runtime" }
+          }
+          Get-Content artifacts/*.zip.sha256 | Set-Content artifacts/SHA256SUMS -Encoding utf8
+      - name: Публикация стабильного GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $title = 'WinState 1.0.0 — Workspace Control и безопасное восстановление'
+          $notes = 'docs/releases/v1.0.0.md'
+          $assets = @(
+            'artifacts/WinState-1.0.0-win-x64.zip',
+            'artifacts/WinState-1.0.0-win-x64.zip.sha256',
+            'artifacts/WinState-1.0.0-win-arm64.zip',
+            'artifacts/WinState-1.0.0-win-arm64.zip.sha256',
+            'artifacts/SHA256SUMS'
+          )
+          gh release view v1.0.0 --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release edit v1.0.0 --repo $env:GITHUB_REPOSITORY --title $title --notes-file $notes --draft=false --prerelease=false --latest
+            if ($LASTEXITCODE -ne 0) { throw 'Не удалось обновить metadata релиза.' }
+            gh release upload v1.0.0 @assets --repo $env:GITHUB_REPOSITORY --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Не удалось загрузить assets релиза.' }
+          } else {
+            gh release create v1.0.0 @assets --repo $env:GITHUB_REPOSITORY --verify-tag --title $title --notes-file $notes --latest
+            if ($LASTEXITCODE -ne 0) { throw 'Не удалось создать стабильный Release.' }
+          }
+      - name: Удаление сертификата из runner store
+        if: always() && steps.signing.outputs.enabled == 'true'
+        shell: pwsh
+        run: Remove-Item 'Cert:\CurrentUser\My\${{ steps.signing.outputs.thumbprint }}' -Force -ErrorAction SilentlyContinue
