@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using WinState.Domain.Planning;
 using WinState.Providers.EnvironmentVariables;
 using WinState.Providers.Features;
@@ -54,6 +55,12 @@ public sealed record DriftReport(
 public sealed class CaptureWorkflow
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly Regex SafePackageId = new(
+        @"^[A-Za-z0-9][A-Za-z0-9._+\-]{1,199}$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly HashSet<string> SupportedPackageSources = new(
+        ["winget", "msstore"],
+        StringComparer.OrdinalIgnoreCase);
     private static readonly string[] SensitiveMarkers =
     [
         "PASSWORD", "PASSWD", "SECRET", "TOKEN", "APIKEY", "API_KEY",
@@ -115,14 +122,29 @@ public sealed class CaptureWorkflow
 
         var userPath = await ReadPathAsync(EnvironmentScope.User, diagnostics, cancellationToken);
         var machinePath = await ReadPathAsync(EnvironmentScope.Machine, diagnostics, cancellationToken);
-        var packages = await _winget.ListInstalledAsync(cancellationToken);
+        var discoveredPackages = await _winget.ListInstalledAsync(cancellationToken);
+        var packages = discoveredPackages
+            .Where(IsCapturablePackage)
+            .GroupBy(
+                package => $"{package.Source}|{package.Id}",
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var skippedPackages = discoveredPackages.Count - packages.Length;
         var features = await _features.ListAsync(cancellationToken);
         var enabledFeatures = features.Where(feature => feature.Enabled).ToArray();
 
-        if (packages.Count > 0)
+        if (packages.Length > 0)
         {
             diagnostics.Add(
                 "WinGet inventory не сообщает scope установки; captured packages используют scope: user и требуют проверки перед apply.");
+        }
+
+        if (skippedPackages > 0)
+        {
+            diagnostics.Add(
+                $"Пропущено неоднозначных строк WinGet inventory: {skippedPackages}. Они не записаны в профиль.");
         }
 
         if (skippedSensitive > 0)
@@ -147,14 +169,15 @@ public sealed class CaptureWorkflow
         await File.WriteAllTextAsync(temporaryPath, yaml, new UTF8Encoding(false), cancellationToken);
         File.Move(temporaryPath, fullPath, true);
 
-        var sha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(fullPath, cancellationToken)))
+        var sha256 = Convert.ToHexString(
+                SHA256.HashData(await File.ReadAllBytesAsync(fullPath, cancellationToken)))
             .ToLowerInvariant();
         var counts = new CaptureCounts(
             userVariables.Count,
             machineVariables.Count,
             userPath.Count,
             machinePath.Count,
-            packages.Count,
+            packages.Length,
             enabledFeatures.Length,
             skippedSensitive);
         var manifestPath = fullPath + ".snapshot.json";
@@ -170,6 +193,7 @@ public sealed class CaptureWorkflow
             userName = System.Environment.UserName,
             sha256,
             counts,
+            skippedAmbiguousPackages = skippedPackages,
             diagnostics
         };
         await WriteJsonAtomicallyAsync(manifestPath, manifest, cancellationToken);
@@ -195,7 +219,8 @@ public sealed class CaptureWorkflow
         }
         catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
         {
-            diagnostics.Add($"Не удалось прочитать {EnvironmentProfileMapper.ScopeName(scope)} environment: {exception.Message}");
+            diagnostics.Add(
+                $"Не удалось прочитать {EnvironmentProfileMapper.ScopeName(scope)} environment: {exception.Message}");
             return new Dictionary<string, string?>();
         }
     }
@@ -211,7 +236,8 @@ public sealed class CaptureWorkflow
         }
         catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
         {
-            diagnostics.Add($"Не удалось прочитать {EnvironmentProfileMapper.ScopeName(scope)} PATH: {exception.Message}");
+            diagnostics.Add(
+                $"Не удалось прочитать {EnvironmentProfileMapper.ScopeName(scope)} PATH: {exception.Message}");
             return Array.Empty<string>();
         }
     }
@@ -229,16 +255,31 @@ public sealed class CaptureWorkflow
             }
 
             var normalized = pair.Key.Replace('-', '_').ToUpperInvariant();
-            if (SensitiveMarkers.Any(marker => normalized.Contains(marker, StringComparison.Ordinal)))
+            var value = pair.Value ?? string.Empty;
+            var containsTemplateSyntax = value.Contains("{{", StringComparison.Ordinal)
+                || value.Contains("${", StringComparison.Ordinal);
+            if (containsTemplateSyntax
+                || SensitiveMarkers.Any(marker => normalized.Contains(marker, StringComparison.Ordinal)))
             {
                 skippedSensitive++;
                 continue;
             }
 
-            result[pair.Key] = pair.Value ?? string.Empty;
+            result[pair.Key] = value;
         }
 
         return result;
+    }
+
+    private static bool IsCapturablePackage(WingetInstalledPackage package)
+    {
+        var id = package.Id.Trim();
+        var source = package.Source.Trim();
+        return SupportedPackageSources.Contains(source)
+            && SafePackageId.IsMatch(id)
+            && id.Any(char.IsLetter)
+            && !string.IsNullOrWhiteSpace(package.Version)
+            && !package.Version.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string BuildYaml(
@@ -256,7 +297,8 @@ public sealed class CaptureWorkflow
         yaml.AppendLine();
         yaml.AppendLine("metadata:");
         yaml.AppendLine($"  name: {Quote(profileName)}");
-        yaml.AppendLine($"  description: {Quote($"Снимок состояния, созданный WinState {WinStateApplication.Version} {capturedAt:O}")}");
+        yaml.AppendLine(
+            $"  description: {Quote($"Снимок состояния, созданный WinState {WinStateApplication.Version} {capturedAt:O}")}");
         yaml.AppendLine("  author: \"WinState Capture\"");
         yaml.AppendLine("  profileVersion: 1");
         yaml.AppendLine();
@@ -271,19 +313,20 @@ public sealed class CaptureWorkflow
         AppendPath(yaml, "userPath", userPath);
         AppendPath(yaml, "machinePath", machinePath);
         yaml.AppendLine();
-        yaml.AppendLine("packages:");
+
         if (packages.Count == 0)
         {
-            yaml.AppendLine("  []");
+            yaml.AppendLine("packages: []");
         }
         else
         {
-            foreach (var package in packages.OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase))
+            yaml.AppendLine("packages:");
+            foreach (var package in packages)
             {
                 yaml.AppendLine($"  - id: {Quote(package.Id)}");
                 yaml.AppendLine("    state: present");
                 yaml.AppendLine($"    version: {Quote(package.Version)}");
-                yaml.AppendLine($"    source: {Quote(string.IsNullOrWhiteSpace(package.Source) ? "winget" : package.Source)}");
+                yaml.AppendLine($"    source: {Quote(package.Source)}");
                 yaml.AppendLine("    scope: user");
                 yaml.AppendLine("    allowUpgrade: false");
                 yaml.AppendLine("    mayRequireReboot: false");
@@ -291,13 +334,13 @@ public sealed class CaptureWorkflow
         }
 
         yaml.AppendLine();
-        yaml.AppendLine("features:");
         if (enabledFeatures.Count == 0)
         {
-            yaml.AppendLine("  []");
+            yaml.AppendLine("features: []");
         }
         else
         {
+            yaml.AppendLine("features:");
             foreach (var feature in enabledFeatures.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
             {
                 yaml.AppendLine($"  - name: {Quote(feature.Name)}");
@@ -327,20 +370,27 @@ public sealed class CaptureWorkflow
         }
     }
 
-    private static void AppendPath(StringBuilder yaml, string section, IReadOnlyList<string> entries)
+    private static void AppendPath(
+        StringBuilder yaml,
+        string section,
+        IReadOnlyList<string> entries)
     {
-        if (entries.Count == 0)
+        var uniqueEntries = entries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (uniqueEntries.Length == 0)
         {
             yaml.AppendLine($"  {section}: []");
             return;
         }
 
         yaml.AppendLine($"  {section}:");
-        foreach (var entry in entries.Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var entry in uniqueEntries)
         {
             yaml.AppendLine($"    - path: {Quote(entry)}");
             yaml.AppendLine("      state: present");
-            yaml.AppendLine("      position: append");
+            yaml.AppendLine("      position: preserve");
         }
     }
 
@@ -400,7 +450,6 @@ public sealed class DriftWorkflow
             .ToArray();
         var destructive = plan.Plan.OrderedActions.Count(action => action.Operation is
             ActionType.Remove or ActionType.Uninstall or ActionType.Disable or ActionType.Stop);
-        string? fullReportPath = null;
         var report = new DriftReport(
             plan.Loaded.Profile.Metadata.Name,
             Path.GetFullPath(profilePath),
@@ -417,8 +466,9 @@ public sealed class DriftWorkflow
 
         if (!string.IsNullOrWhiteSpace(reportPath))
         {
-            fullReportPath = Path.GetFullPath(reportPath);
-            Directory.CreateDirectory(Path.GetDirectoryName(fullReportPath) ?? System.Environment.CurrentDirectory);
+            var fullReportPath = Path.GetFullPath(reportPath);
+            Directory.CreateDirectory(
+                Path.GetDirectoryName(fullReportPath) ?? System.Environment.CurrentDirectory);
             report = report with { ReportPath = fullReportPath };
             var temporaryPath = fullReportPath + ".tmp";
             await File.WriteAllTextAsync(
