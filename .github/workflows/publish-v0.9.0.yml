@@ -1,0 +1,63 @@
+name: Публикация WinState 0.9.0
+
+on:
+  push:
+    branches: [release/v0.9.0]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Стабильный релиз Latest
+    runs-on: windows-latest
+    steps:
+      - name: Получение релизного коммита
+        uses: actions/checkout@v4
+        with:
+          ref: c4a377051f6b1bae44a22d215ca390faa99d4e09
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Восстановление зависимостей
+        run: dotnet restore WinState.sln
+      - name: Сборка
+        run: dotnet build WinState.sln --configuration Release --no-restore
+      - name: Полный набор тестов
+        run: dotnet test WinState.sln --configuration Release --no-build
+      - name: Сборка Windows x64
+        shell: pwsh
+        run: .\scripts\package.ps1 -Runtime win-x64 -Version 0.9.0
+      - name: Сборка Windows ARM64
+        shell: pwsh
+        run: .\scripts\package.ps1 -Runtime win-arm64 -Version 0.9.0
+      - name: Общий файл контрольных сумм
+        shell: pwsh
+        run: |
+          Get-Content artifacts/*.zip.sha256 | Set-Content artifacts/SHA256SUMS -Encoding utf8
+      - name: Создание стабильного тега
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          $existing = git ls-remote --tags origin refs/tags/v0.9.0
+          if ($existing) { throw "Тег v0.9.0 уже существует." }
+          git tag -a v0.9.0 c4a377051f6b1bae44a22d215ca390faa99d4e09 -m "WinState 0.9.0 — Снимки состояния и контроль отклонений"
+          git push origin refs/tags/v0.9.0
+      - name: Публикация обычного GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.9.0
+          target_commitish: c4a377051f6b1bae44a22d215ca390faa99d4e09
+          name: WinState 0.9.0 — Снимки состояния и контроль отклонений
+          body_path: docs/releases/v0.9.0.md
+          prerelease: false
+          make_latest: true
+          generate_release_notes: false
+          files: |
+            artifacts/WinState-0.9.0-win-x64.zip
+            artifacts/WinState-0.9.0-win-arm64.zip
+            artifacts/WinState-0.9.0-win-x64.zip.sha256
+            artifacts/WinState-0.9.0-win-arm64.zip.sha256
+            artifacts/SHA256SUMS
